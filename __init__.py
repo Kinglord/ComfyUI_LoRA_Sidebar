@@ -103,6 +103,9 @@ class RateLimiter:
 RATE_LIMITER = RateLimiter(MAX_REQUESTS_PER_MINUTE, 60)  # 120 calls per 60 seconds
 
 async def hash_file(filepath):
+    if os.path.isfile(filepath + ".sha256"):
+        with open(filepath + ".sha256", "rt") as f:
+            return f.read().strip()
     sha256_hash = hashlib.sha256()
     with open(filepath, "rb") as f:
         for byte_block in iter(lambda: f.read(4096), b""):
