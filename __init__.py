@@ -107,7 +107,7 @@ async def hash_file(filepath):
         with open(filepath + ".sha256", "rt") as f:
             return f.read().strip()
     if os.path.isfile(os.path.splitext(filepath)[0] + ".sha256"):
-        with open(os.path.splitext(filepath)[0] + ".sha256" + ".sha256", "rt") as f:
+        with open(os.path.splitext(filepath)[0] + ".sha256", "rt") as f:
             return f.read().strip()
     with open(filepath, "rb") as f:
         for byte_block in iter(lambda: f.read(4096), b""):
