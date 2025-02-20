@@ -435,7 +435,7 @@ def get_subdir(file_path):
         logger.debug(f"Lora dirs from folder_paths: {lora_dirs}")
 
         # Filter out output directories
-        lora_dirs = [d for d in lora_dirs if 'output' not in d.lower().split(os.sep)]
+        lora_dirs = [os.path.realpath(d) for d in lora_dirs if 'output' not in d.lower().split(os.sep)]
         
         logger.debug(f"Lora dirs from folder_paths (excluding output dirs): {lora_dirs}")
         
