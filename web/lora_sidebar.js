@@ -4,7 +4,7 @@ import { $el } from "../../scripts/ui.js";
 import LoraSmartInfo from './smart_info.js';
 
 var debug = {
-    enabled: false,
+    enabled: true,
     log: function(...args) {
         if (this.enabled) {
             console.log(...args);
@@ -412,6 +412,15 @@ class LoraSidebar {
             }
         });
         return count;
+    }
+
+    loraPathCalc(loraData) {
+        return `${loraData.path}${loraData.path ? "/" : ""}${loraData.filename.split("/").pop()}`;
+    }
+    
+    loraPathCalcUpdate(loraData) {
+        debug.log("loraPathCalcUpdate", loraData);
+        return `${loraData.subdir}/${loraData.filename}`;
     }
 
     sanitizeHTML(html) {
@@ -2316,18 +2325,21 @@ class LoraSidebar {
                         return;
                     }
 
+                    debug.log("Found LoRA data for drop:", loraData);
+
+                    // Ensure we have the full path including filename
                     const fullPath = loraData.path || "";
-                    const filename = fullPath.substring(fullPath.lastIndexOf('\\') + 1);
-    
+                    const filename = loraData.filename || dragData.id + ".safetensors";  // Fallback to ID if needed
+
                     const nodeData = {
                         name: loraData.name,
                         reco_weight: loraData.reco_weight,
-                        path: loraData.subdir || "",
+                        path: loraData.subdir || "",  // Keep this as is
                         filename: filename,
                         trainedWords: loraData.trained_words
                     };
 
-                    debug.log(`Set nodedata name to`, nodeData.filename);
+                    debug.log("Set nodedata for drop:", nodeData);
     
                     let attempts = 0;
                     const maxAttempts = 3;
@@ -2383,7 +2395,7 @@ class LoraSidebar {
                                     }
                                 }
                             } else {
-                                this.createLoraNode(nodeData, dropX, dropY);
+                                this.createLoraNode(nodeData, dropX, dropY, loraData);
                                 debug.log("Successfully created node");
                             }
                     
@@ -2431,57 +2443,55 @@ class LoraSidebar {
     }
     
     
-    createLoraNode(loraData, x, y) {
+    createLoraNode(nodeData, x, y, loraData) {
         if (this.UseRG3) {
             // Create Power Lora Loader node
             const node = LiteGraph.createNode("Power Lora Loader (rgthree)");
             node.pos = [x, y];
-            
+
             // Add the node to the graph (this needs to happen before we add widgets)
             app.graph.add(node);
-            
+
             // Use our existing code to add the lora to the new node
             const widget = node.addNewLoraWidget();
-            
+
             const weight = loraData.reco_weight ?? 1;
-            const loraPath = `${loraData.path}${loraData.path ? '\\' : ''}${loraData.filename}`;
-            
+            const loraPath = this.loraPathCalc(loraData);
+
             widget.value = {
                 on: true,
                 lora: loraPath,
                 strength: weight,
-                strengthTwo: null
+                strengthTwo: null,
             };
-    
+
             widget.loraInfo = {
-                file: loraData.filename,
+                file: loraData.filename.split("/").pop(), // Ensure we get just the filename
                 path: loraPath,
-                images: []
+                images: [],
             };
-    
+
             // Handle node resizing
             const computed = node.computeSize();
             const tempHeight = node._tempHeight ?? 15;
             node.size[1] = Math.max(tempHeight, computed[1]);
-            
+
             node.setDirtyCanvas(true, true);
         } else {
             // Original LoraLoader code
             const node = LiteGraph.createNode("LoraLoader");
             node.pos = [x, y];
-            
-            // Set node title
-            node.title = `Lora - ${loraData.name}`;
-            
-            // Get recommended weight, default to 1 if not present
-            const weight = loraData.reco_weight ?? 1;
 
-            debug.log("Set filename to", loraData.filename);
+            // Set node title
+            node.title = `Lora - ${nodeData.name}`;
+
+            // Get recommended weight, default to 1 if not present
+            const weight = nodeData.reco_weight ?? 1;
 
             // Set widget values
             for (const widget of node.widgets) {
                 if (widget.name === "lora_name") {
-                    widget.value = `${loraData.path}${loraData.path ? '\\' : ''}${loraData.filename}`;
+                    widget.value = nodeData.path ? `${nodeData.path}\\${nodeData.filename}` : nodeData.filename;
                 } else if (widget.name === "strength_model") {
                     widget.value = weight;
                 } else if (widget.name === "strength_clip") {
@@ -2489,68 +2499,63 @@ class LoraSidebar {
                 }
             }
 
-            debug.log("Set filename to", loraData.filename);
-            
             // Add the node to the graph
             app.graph.add(node);
         }
-        
+
         // Ensure the canvas is updated
         app.graph.setDirtyCanvas(true, true);
     }
 
     updateLoraNode(node, loraData) {
-
-        // name hack
-        const fullPath = loraData.path || "";
-        const filename = fullPath.substring(fullPath.lastIndexOf('\\') + 1);
+        // Get just the filename without path
+        const filename = loraData.filename.split("/").pop();
 
         // Handle different node types
         if (node.type === "LoraLoader") {
             // Update the node title
             node.title = `Lora - ${loraData.name}`;
-            
+
             // Get recommended weight, default to 1 if not present
             const weight = loraData.reco_weight ?? 1;
 
             // Update widget values
             for (const widget of node.widgets) {
                 if (widget.name === "lora_name") {
-                    widget.value = `${loraData.subdir}${loraData.subdir ? '\\' : ''}${filename}`;
+                    widget.value = loraData.subdir ? `${loraData.subdir}\\${loraData.filename.split("/").pop()}` : loraData.filename.split("/").pop();
                 } else if (widget.name === "strength_model") {
                     widget.value = weight;
                 } else if (widget.name === "strength_clip") {
                     widget.value = weight;
                 }
             }
-
         } else if (node.type === "Power Lora Loader (rgthree)") {
             debug.log("Starting update with data:", loraData);
-        
+
             const widget = node.addNewLoraWidget();
             debug.log("Created widget:", widget);
-    
+
             const weight = loraData.reco_weight ?? 1;
-            const loraPath = `${loraData.subdir}${loraData.subdir ? '\\' : ''}${filename}`;
-            
+            const loraPath = this.loraPathCalcUpdate(loraData);
+
             widget.value = {
                 on: true,
                 lora: loraPath,
                 strength: weight,
-                strengthTwo: null
+                strengthTwo: null,
             };
-    
+
             widget.loraInfo = {
-                file: filename,
+                file: filename, // Just use the filename
                 path: loraPath,
-                images: []
+                images: [],
             };
-    
+
             // Handle node resizing
             const computed = node.computeSize();
             const tempHeight = node._tempHeight ?? 15;
             node.size[1] = Math.max(tempHeight, computed[1]);
-            
+
             node.setDirtyCanvas(true, true);
         }
         // Ensure the canvas is updated

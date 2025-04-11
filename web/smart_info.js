@@ -2,7 +2,7 @@ import { app } from "../../scripts/app.js";
 const stores = app.getAppStores?.() || {};
 
 var debug = {
-    enabled: false,
+    enabled: true,
     log: function(...args) {
         if (this.enabled) {
             console.log(...args);
@@ -244,16 +244,39 @@ class LoraSmartInfo {
             // Create preview element
             const previewElement = document.createElement('div');
             previewElement.className = 'lora-preview-popup';
-            previewElement.style.position = 'fixed';
             
+            // Get preview URL and prepare content
+            const filename = data.info.path.split('\\').pop().replace('.safetensors', '');
+            const previewUrl = `/lora_sidebar/preview/${encodeURIComponent(filename)}?cb=${Date.now()}`;
+
+            // Prepare trained words section if enabled
+            let trainedWordsHtml = '';
+            if (this.showTrained && data.info.trained_words?.length > 0) {
+                trainedWordsHtml = `
+                    <div class="text-sm mt-2 opacity-70">
+                        <div class="font-bold">Trained Words:</div>
+                        <div class="italic">${data.info.trained_words.join(', ')}</div>
+                    </div>
+                `;
+            }
+
+            // Add content with size-constrained image
+            previewElement.innerHTML = `
+                <div class="p-panel-content">
+                    <img src="${previewUrl}" alt="${data.info.name}" style="max-width: 256px; max-height: 256px;">
+                    <div class="mt-2">
+                        <div class="font-bold">${data.info.name}</div>
+                        ${data.info.description ? `<div class="text-sm opacity-80">${data.info.description}</div>` : ''}
+                        ${data.info.trigger_phrase ? `<div class="text-sm opacity-70 italic">Trigger: ${data.info.trigger_phrase}</div>` : ''}
+                        ${trainedWordsHtml}
+                    </div>
+                </div>
+            `;
+
             // Calculate position considering window boundaries
             const padding = 20;
             const windowWidth = window.innerWidth;
             const windowHeight = window.innerHeight;
-            
-            // Add preview content
-            const content = this.createPreviewContent(data.info);
-            previewElement.innerHTML = content;
             
             // Add to document temporarily to get dimensions
             previewElement.style.visibility = 'hidden';
@@ -277,6 +300,7 @@ class LoraSmartInfo {
             }
             
             // Apply final position
+            previewElement.style.position = 'fixed';
             previewElement.style.left = `${finalX}px`;
             previewElement.style.top = `${finalY}px`;
             previewElement.style.visibility = 'visible';
@@ -830,39 +854,32 @@ class LoraSmartInfo {
             );
             return;
         }
-    
-        // Get currently displayed lora name from popup if it exists
-        const currentDisplayedName = this.checkCurrentDisplayedLora();
-    
+
         // Get actual lora name from info.json
         try {
             const response = await fetch(`/lora_sidebar/info/${encodeURIComponent(loraName)}`);
             if (response.ok) {
                 const data = await response.json();
-                if (data.status === "success" && data.info?.name === currentDisplayedName) {
-                    return; // Exit if the same lora is already being displayed
+                if (data.status === "success") {
+                    // Use the proper name from the info.json for the lookup
+                    const properLoraName = data.info.name;
+                    const lora = this.sidebar.loraData.find(l => l.name === properLoraName);
+                    
+                    if (lora) {
+                        this.sidebar.showLoraInfo(lora, null);
+                        return;
+                    }
                 }
             }
         } catch (error) {
             console.error("Failed to fetch LoRA info:", error);
         }
-    
-        // If we get here, either the names don't match or there was an error, proceed with showing the lora
-        const lora = this.sidebar.loraData.find(l => {
-            const filename = l.path?.split('\\').pop() || '';
-            const cleanName = filename.replace(/\.[^/.]+$/, '');
-            return cleanName === loraName;
-        });
-    
-        if (lora) {
-            this.sidebar.showLoraInfo(lora, null);
-        } else {
-            this.sidebar.showToast(
-                "warn",
-                "LoRA Not Found",
-                "Could not find matching LoRA in sidebar data"
-            );
-        }
+
+        this.sidebar.showToast(
+            "warn",
+            "LoRA Not Found",
+            "Could not find matching LoRA in sidebar data"
+        );
     }
 
     checkCurrentDisplayedLora() {
