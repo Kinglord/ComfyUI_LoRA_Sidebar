@@ -1,5 +1,9 @@
 # ComfyUI_LoRA_Sidebar
-### EVEN BIGGER UPDATE - NOT JUST A SIDEBAR, NOW SHOWING CANVAS PREVIEWS!
+### WE'RE BACK BABY!
+Not a lot of feature updates (none, actually) but it's WORKING AGAIN in ComfyUI Frontend 1.14.6 - lets hope there's not a another total refactor in 3 months 😂
+
+![image](https://media1.tenor.com/m/2lMoNRA0o5QAAAAC/megamind-metroman.gif)
+
 ## What is this?
 A custom front-end UX node that creates a visual library of all your LoRAs. It's designed to be fast, slim, and make using LoRAs in Comfy a lot more fun for visual users - especially if you have lots of LoRAs. Should make people used to A1111 and other UI heavy platforms feel more at home. If you've got lots of LoRAs, this sidebar could be your new best friend!
 
