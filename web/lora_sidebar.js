@@ -2362,16 +2362,22 @@ class LoraSidebar {
                                         w.name === "string" ||
                                         w.name === "prompt"
                                     );
-                    
+
                                     if (textWidget) {
                                         const currentText = textWidget.value || "";
                                         let newText = currentText;
-                                        let trainedWords = nodeData.trainedWords[0];
-                    
+                                        let trainedWords = "";
+
+                                        // Handle trained words if they exist
+                                        if (nodeData.trainedWords?.length > 0) {
+                                            trainedWords = nodeData.trainedWords[0];
+                                        }
+
                                         // If a1111Style is enabled, prefix with LoRA syntax
                                         if (this.a1111Style) {
-                                            const loraPath = nodeData.path ? `${nodeData.path}/` : '';
-                                            const loraPart = `${loraPath}${nodeData.name}`;
+                                            const loraPath = nodeData.path ? `${nodeData.path}\\` : '';
+                                            const loraName = nodeData.filename.replace(/\.[^/.]+$/, ""); // this might not be safe because filenames can we be weird
+                                            const loraPart = `${loraPath}${loraName}`;
                                             const weight = nodeData.reco_weight ?? 1;
                                             const weightStr = weight.toString().includes('.') ? weight.toFixed(2) : weight;
                                             trainedWords = `<lora:${loraPart}:${weightStr}>, ${trainedWords}`;
