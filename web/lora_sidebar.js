@@ -59,7 +59,7 @@ class LoraSidebar {
             "character", "style", "celebrity", "concept", "clothing", "poses", 
             "background", "tool", "buildings", "vehicle", "objects", "animal", "assets", "action"
         ];
-        this.CUSTOM_TAGS = app.extensionManager.setting.get('LoRA Sidebar.General.customTags', "").split(',').map(tag => tag.trim().toLowerCase());
+        this.CUSTOM_TAGS = (app.extensionManager.setting.get('LoRA Sidebar.General.customTags') || "").split(',').map(tag => tag.trim().toLowerCase());
         debug.log("After loading CUSTOM_TAGS:", this.CUSTOM_TAGS);
         this.tagSource = app.extensionManager.setting.get('LoRA Sidebar.General.tagSource', "CivitAI");
         debug.log("Tag source:", this.tagSource);

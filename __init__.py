@@ -1730,11 +1730,18 @@ async def process_loras(request):
 
 @PromptServer.instance.routes.get("/lora_sidebar/data")
 async def get_lora_data(request):
-    # Get request parameters
-    offset = int(request.query.get('offset', 0))
-    limit = int(request.query.get('limit', 500))
+    # Get request parameters with input validation
+    offset_str = request.query.get('offset', '0')
+    if offset_str.isdigit():
+        offset = int(offset_str)
+    else:
+        offset = 0
 
-    # Make sure we don't go over actual total lora size
+    limit_str = request.query.get('limit', '500')
+    if limit_str.isdigit():
+        limit = int(limit_str)
+    else:
+        limit = 500
     #totalLoras = len(LORA_CACHE['ordered_loras'])
     #logger.error('Initial request limit', limit)
     #if limit > totalLoras:
@@ -2927,13 +2934,14 @@ async def sort_loras_with_categories(loras, settings, favorites, sort_metadata):
 
     # Define sort key function
     def sort_key(lora):
-        if settings['sortMethod'] == 'AlphaAsc':
+        sort_method = settings.get('sortMethod', 'AlphaAsc')
+        if sort_method == 'AlphaAsc':
             name = lora.get('name') or lora.get('filename') or 'zzz'
             return name.lower()
-        elif settings['sortMethod'] == 'AlphaDesc':
+        elif sort_method == 'AlphaDesc':
             name = lora.get('name') or lora.get('filename') or '___'
             return -ord(name[0].lower())
-        elif settings['sortMethod'] == 'DateNewest':
+        elif sort_method == 'DateNewest':
             date_str = lora.get('createdDate', '1970-01-01')
             if date_str in ('unknown', '1970-01-01'):
                 return FALLBACK_TIMESTAMP
@@ -3112,7 +3120,12 @@ async def build_initial_cache():
 @PromptServer.instance.routes.get("/lora_sidebar/category/{category_name}")
 async def get_category_items(request):
     category_name = request.match_info['category_name']
-    limit = int(request.query.get('limit', 500))
+    # limit = int(request.query.get('limit', 500))
+    limit_str = request.query.get('limit', '500')
+    if limit_str.isdigit():
+        limit = int(limit_str)
+    else:
+        limit = 500
    
     if not LORA_CACHE['ordered_loras']:
         return web.json_response({"error": "No LoRA data loaded"}, status=400)
