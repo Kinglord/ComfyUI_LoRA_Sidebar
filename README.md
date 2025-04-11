@@ -10,6 +10,12 @@ A custom front-end UX node that creates a visual library of all your LoRAs. It's
 ![image](https://github.com/user-attachments/assets/a1140952-2342-4c92-8f50-32067b2e2e0f)
 
 ## Updates
+#### 04/11/25
+- SURPRISE
+- Updated the plugin to work again with newer FE builds of ComfyUI, tested and working on FE 1.14.6 (probably still some bugs)
+- Added something for scroll memory that works OKish
+- Supported added for webp files
+- Fixed some linux file handling
 #### 11/23/24
 - Wow, not even I was prepared for this update
 - Added all new "Smart Info" feature, empowering your ComfyUI experience without even opening the sidebar. Game Changer 🤯
