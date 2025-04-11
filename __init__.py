@@ -90,6 +90,23 @@ ANSI_COLORS = {
     'BOLD': '\033[1m'
 }
 
+# Common date formats
+DATE_FORMATS = [
+    '%Y-%m-%dT%H:%M:%S.%f%z',  # 2024-10-16T01:33:25.4734839+00:00
+    '%Y-%m-%dT%H:%M:%S.%f',    # 2024-10-16T01:33:25.473483
+    '%Y-%m-%d',                 # 2023-12-25
+    '%Y/%m/%d',                 # 2023/12/25
+    '%d-%m-%Y',                 # 25-12-2023
+    '%d/%m/%Y',                # 25/12/2023
+    '%m/%d/%Y',                # 12/25/2023 (US format)
+    '%Y-%m-%d %H:%M:%S',       # 2023-12-25 13:45:30
+    '%Y-%m-%dT%H:%M:%S',       # 2023-12-25T13:45:30
+    '%Y-%m-%dT%H:%M:%SZ',      # 2023-12-25T13:45:30Z
+    '%d-%b-%Y',                # 25-Dec-2023
+    '%d %b %Y',                # 25 Dec 2023
+    '%Y%m%d'                   # 20231225
+]
+
 # hack for lora processing
 class LoraDataStore:
     _instance = None
@@ -1569,10 +1586,12 @@ async def process_loras(request):
                         
                         # Resort if needed
                         if len(LORA_CACHE['ordered_loras']) > 1:
+                            # Get  user settings for sorting
+                            settings = PromptServer.instance.user_manager.settings.get_settings(request)
                             sort_metadata = await get_lora_sort_metadata()
                             LORA_CACHE['ordered_loras'] = await sort_loras_with_categories(
                                 LORA_CACHE['ordered_loras'],
-                                CACHE_SETTINGS,
+                                settings,
                                 processed_loras.get('favorites', []),
                                 sort_metadata
                             )
@@ -2828,6 +2847,17 @@ async def sort_loras_with_categories(loras, settings, favorites, sort_metadata):
     """
     Process loras with their real categories and status flags.
     """
+    # Add default settings if missing
+    settings = {
+        'sortMethod': settings.get('sortMethod', 'AlphaAsc'),
+        'sortModels': settings.get('sortModels', 'None'),
+        'tagSource': settings.get('tagSource', 'CivitAI'),
+        'customTags': settings.get('customTags', []),
+        'catNew': settings.get('catNew', True),
+        'nsfwFolder': settings.get('nsfwFolder', True),
+        'nsfwString': settings.get('nsfwString', 'NSFW')
+    }
+
     for lora in loras:
         # Set status flags
         lora['favorite'] = lora['id'] in favorites
@@ -2908,24 +2938,7 @@ async def sort_loras_with_categories(loras, settings, favorites, sort_metadata):
             if date_str in ('unknown', '1970-01-01'):
                 return FALLBACK_TIMESTAMP
             
-            # Common date formats
-            formats = [
-                '%Y-%m-%dT%H:%M:%S.%f%z',  # 2024-10-16T01:33:25.4734839+00:00
-                '%Y-%m-%dT%H:%M:%S.%f',    # 2024-10-16T01:33:25.473483
-                '%Y-%m-%d',                 # 2023-12-25
-                '%Y/%m/%d',                 # 2023/12/25
-                '%d-%m-%Y',                 # 25-12-2023
-                '%d/%m/%Y',                # 25/12/2023
-                '%m/%d/%Y',                # 12/25/2023 (US format)
-                '%Y-%m-%d %H:%M:%S',       # 2023-12-25 13:45:30
-                '%Y-%m-%dT%H:%M:%S',       # 2023-12-25T13:45:30
-                '%Y-%m-%dT%H:%M:%SZ',      # 2023-12-25T13:45:30Z
-                '%d-%b-%Y',                # 25-Dec-2023
-                '%d %b %Y',                # 25 Dec 2023
-                '%Y%m%d'                   # 20231225
-            ]
-            
-            for fmt in formats:
+            for fmt in DATE_FORMATS:
                 try:
                     timestamp = datetime.strptime(date_str, fmt).timestamp()
                     return -timestamp
@@ -2939,7 +2952,7 @@ async def sort_loras_with_categories(loras, settings, favorites, sort_metadata):
             if date_str in ('unknown', '1970-01-01'):
                 return -FALLBACK_TIMESTAMP
                 
-            for fmt in formats:
+            for fmt in DATE_FORMATS:
                 try: 
                     timestamp = datetime.strptime(date_str, fmt).timestamp()
                     return timestamp

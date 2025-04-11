@@ -14,6 +14,10 @@ var debug = {
 
 class LoraSidebar {
     constructor(app) {
+        const stores = app.getAppStores?.() || {};
+        this.canvasStore = stores.canvasStore;
+        this.settingStore = stores.settingStore;
+
         this.app = app;
 
         //session state changes
@@ -24,20 +28,20 @@ class LoraSidebar {
         this.isNewSession = this.checkNewSession();        ;
         this.state = this.isNewSession ? this.getDefaultState() : this.loadState();
         this.isFirstOpen = true; //session hack
-        this.defaultCatState = app.ui.settings.getSettingValue("LoRA Sidebar.General.catState", "Expanded") === "Expanded";
-        this.favState = app.ui.settings.getSettingValue("LoRA Sidebar.General.favState", true);
+        this.defaultCatState = app.extensionManager.setting.get('LoRA Sidebar.General.catState', "Expanded") === "Expanded";
+        this.favState = app.extensionManager.setting.get('LoRA Sidebar.General.favState', true);
         this.loraData = [];
         this.filteredData = [];
-        this.SorthMethod = app.ui.settings.getSettingValue("LoRA Sidebar.General.sortMethod", 'AlphaAsc');
+        this.SorthMethod = app.extensionManager.setting.get('LoRA Sidebar.General.sortMethod', 'AlphaAsc');
         this.minSize = 100;
         this.maxSize = 400;
         this.loadingDelay = 800; // continuous loading delay
         this.initialIndex = 500;
         this.searchDelay = 150;
         this.searchTimeout = null;
-        this.batchSize = app.ui.settings.getSettingValue("LoRA Sidebar.General.batchSize", 500);
+        this.batchSize = app.extensionManager.setting.get('LoRA Sidebar.General.batchSize', 500);
         this.nextStartIndex = this.initialIndex + 1;
-        this.savedElementSize = app.ui.settings.getSettingValue("LoRA Sidebar.General.thumbnailSize", 125);
+        this.savedElementSize = app.extensionManager.setting.get('LoRA Sidebar.General.thumbnailSize', 125);
         this.elementSize = this.state.elementSize || this.savedElementSize;
         this.loadingIndicator = this.createLoadingIndicator();
         this.galleryContainer = this.createGalleryContainer();
@@ -46,8 +50,8 @@ class LoraSidebar {
         this.loraSidebarWidth = 0;
         this.searchInput = this.createSearchInput();
         this.initialRenderComplete = false;
-        this.savedModelFilter = app.ui.settings.getSettingValue("LoRA Sidebar.General.showModels", "All");
-        this.sortModels = app.ui.settings.getSettingValue("LoRA Sidebar.General.sortModels", 'None');
+        this.savedModelFilter = app.extensionManager.setting.get('LoRA Sidebar.General.showModels', "All");
+        this.sortModels = app.extensionManager.setting.get('LoRA Sidebar.General.sortModels', 'None');
         this.modelFilter = this.state.modelFilter || this.savedModelFilter;
         this.modelFilterDropdown = this.createModelFilterDropdown();
         this.currentSearchInput = this.state.searchTerm ? this.state.searchTerm.split(/\s+/) : [];
@@ -55,13 +59,13 @@ class LoraSidebar {
             "character", "style", "celebrity", "concept", "clothing", "poses", 
             "background", "tool", "buildings", "vehicle", "objects", "animal", "assets", "action"
         ];
-        this.CUSTOM_TAGS = app.ui.settings.getSettingValue("LoRA Sidebar.General.customTags", "").split(',').map(tag => tag.trim().toLowerCase());
+        this.CUSTOM_TAGS = app.extensionManager.setting.get('LoRA Sidebar.General.customTags', "").split(',').map(tag => tag.trim().toLowerCase());
         debug.log("After loading CUSTOM_TAGS:", this.CUSTOM_TAGS);
-        this.tagSource = app.ui.settings.getSettingValue("LoRA Sidebar.General.tagSource", "CivitAI");
+        this.tagSource = app.extensionManager.setting.get('LoRA Sidebar.General.tagSource', "CivitAI");
         debug.log("Tag source:", this.tagSource);
-        this.a1111Style = app.ui.settings.getSettingValue("LoRA Sidebar.General.a1111Style", false);
-        this.UseRG3 = app.ui.settings.getSettingValue("LoRA Sidebar.General.useRG3", false);
-        this.infoPersist = app.ui.settings.getSettingValue("LoRA Sidebar.General.infoPersist", true);
+        this.a1111Style = app.extensionManager.setting.get('LoRA Sidebar.General.a1111Style', false);
+        this.UseRG3 = app.extensionManager.setting.get('LoRA Sidebar.General.useRG3', false);
+        this.infoPersist = app.extensionManager.setting.get('LoRA Sidebar.General.infoPersist', true);
         this.loadingOverlay = this.createLoadingOverlay();
         this.lastLoadOffset = 0;
         this.searchCount = 0;
@@ -86,17 +90,18 @@ class LoraSidebar {
         this.preventDragging();
 
         this.placeholderUrl = "/lora_sidebar/placeholder";
-        this.CatNew = app.ui.settings.getSettingValue("LoRA Sidebar.General.catNew", false);
-        this.FavOpen = app.ui.settings.getSettingValue("LoRA Sidebar.General.favState", true);
+        this.CatNew = app.extensionManager.setting.get('LoRA Sidebar.General.catNew', false);
+        this.FavOpen = app.extensionManager.setting.get('LoRA Sidebar.General.favState', true);
 
-        this.smartEnabled = app.ui.settings.getSettingValue("LoRA Sidebar.General.smartEnabled", true)
+        this.smartEnabled = app.extensionManager.setting.get('LoRA Sidebar.General.smartEnabled', true)
 
-        this.showNSFW = app.ui.settings.getSettingValue("LoRA Sidebar.NSFW.hideNSFW", true);
-        this.nsfwThreshold = app.ui.settings.getSettingValue("LoRA Sidebar.NSFW.nsfwLevel", 25);
-        this.nsfwFolder = app.ui.settings.getSettingValue("LoRA Sidebar.NSFW.nsfwFolder", true);
-        this.nsfwString = app.ui.settings.getSettingValue("LoRA Sidebar.NSFW.nsfwString", "NSFW");
+        this.showNSFW = app.extensionManager.setting.get('LoRA Sidebar.NSFW.hideNSFW', true);
+        this.nsfwThreshold = app.extensionManager.setting.get('LoRA Sidebar.NSFW.nsfwLevel', 25);
+        this.nsfwFolder = app.extensionManager.setting.get('LoRA Sidebar.NSFW.nsfwFolder', true);
+        this.nsfwString = app.extensionManager.setting.get('LoRA Sidebar.NSFW.nsfwString', "NSFW");
 
         this.addStyles().catch(console.error);
+        //this.lastProcessed = { newVal: undefined, oldVal: undefined }; // I NEED TO REFACTOR THIS
 
         api.addEventListener("lora_process_progress", this.updateProgress.bind(this));
     }
@@ -130,6 +135,8 @@ class LoraSidebar {
             modelFilter: this.savedModelFilter,
             elementSize: this.savedElementSize,
             categoryStates: {},
+            scrollPosition: 0,
+            totalLoaded: 0
         };
     }
 
@@ -141,6 +148,16 @@ class LoraSidebar {
         const savedState = sessionStorage.getItem(this.stateKey);
         return savedState ? JSON.parse(savedState) : this.getDefaultState();
     }
+
+    getTotalLoadedItems() {
+        const containers = this.galleryContainer.querySelectorAll('.lora-items-container');
+        let total = 0;
+        containers.forEach(container => {
+            total += container.children.length;
+        });
+        return total;
+    }
+
     ///////
 
     getActiveTags() {
@@ -277,6 +294,14 @@ class LoraSidebar {
             draggable: false,            
         });
         return this.galleryContainer;
+    }
+
+    saveScrollPosition() {
+        const sidebarContentContainer = document.querySelector('.sidebar-content-container');
+        if (sidebarContentContainer) {
+            this.state.scrollPosition = sidebarContentContainer.scrollTop;
+            this.saveState();
+        }
     }
 
     handleSearch(searchInput) {
@@ -875,7 +900,7 @@ class LoraSidebar {
                                     sort: sortPreference,
                                     nsfw_folder: this.nsfwFolder
                                 });
-    
+
                                 const nextResponse = await api.fetchApi(nextUrl);
                                 if (nextResponse.ok) {
                                     const nextData = await nextResponse.json();
@@ -1241,8 +1266,19 @@ class LoraSidebar {
                 debug.log("Sidebar content container found, attaching scroll handler");
        
                 let isLoading = false; // Track actual load state
+                let scrollTimeout;
                    
                 sidebarContentContainer.addEventListener('scroll', async () => {
+                    // Clear any existing timeout
+                    if (scrollTimeout) {
+                        clearTimeout(scrollTimeout);
+                    }
+
+                    // Set a new timeout to save scroll position after scrolling stops
+                    scrollTimeout = setTimeout(() => {
+                        this.saveScrollPosition();
+                    }, 100);
+
                     // Regular processing for normal category modes
                     if (this.sortModels !== 'None') {
                         if (!isLoading) {
@@ -1270,6 +1306,17 @@ class LoraSidebar {
                         isLoading = false;
                     }
                 }, { passive: true });
+
+                // Restore scroll position after content is loaded
+                if (this.state.scrollPosition) {
+                    const restoreScroll = () => {
+                        sidebarContentContainer.scrollTop = this.state.scrollPosition;
+                    };
+                    
+                    // Try immediately and after a short delay to ensure content is loaded
+                    restoreScroll();
+                    setTimeout(restoreScroll, 100);
+                }
        
                 observer.disconnect();
             }
@@ -4961,7 +5008,8 @@ class LoraSidebar {
             this.loadingOverlay.style.display = "none";
 
         }
-    
+
+        const initialCount = this.state.totalLoaded || 500;
         this.handleSearch(this.state.searchTerm || '');
     }
 
@@ -4970,10 +5018,17 @@ class LoraSidebar {
 app.registerExtension({
     name: "comfy.lora.sidebar",
     async setup() {
+        console.log("%c[LoRA Sidebar]", "color: #00ff00", "Extension setup starting");
+        
+        // Wait for stores to be available
+        await app.storesReady;
+        console.log("%c[LoRA Sidebar]", "color: #00ff00", "Stores ready");
+        
         const loraSidebar = new LoraSidebar(app);
         app.loraSidebar = loraSidebar;
 
         // Add smart info feature after sidebar is created
+        console.log("%c[LoRA Sidebar]", "color: #00ff00", "Creating SmartInfo instance");
         loraSidebar.smartInfo = new LoraSmartInfo(loraSidebar);
 
         app.extensionManager.registerSidebarTab({
@@ -4988,29 +5043,60 @@ app.registerExtension({
                     loraSidebar.isFirstOpen = false;
                     loraSidebar.isNewSession = loraSidebar.checkNewSession();
                 }
-                loraSidebar.update();
+                loraSidebar.update().then(() => {
+                    // After update completes, restore scroll position
+                    const sidebarContentContainer = document.querySelector('.sidebar-content-container');
+                    if (sidebarContentContainer && loraSidebar.state.scrollPosition) {
+                        sidebarContentContainer.scrollTop = loraSidebar.state.scrollPosition;
+                    }
+                });
                 loraSidebar.setupScrollHandler();
                 loraSidebar.setupCanvasDropHandling();
             },
         });
-
-        app.ui.settings.addSetting({
+    },
+    settings: [
+        {
             id: "LoRA Sidebar.General.showModels",
             name: "Base Models to Show",
-            type: 'combo',
-            options: ['All', 'Pony', 'Flux', 'SD 3.5', 'Illustrious', 'SDXL', 'SD1.5', 'Other'],
-            defaultValue: 'All',
+            category: ["LoRA Sidebar", "General", "Model Filter"],
+            type: "combo",
+            options: ["All", "Pony", "Flux", "SD 3.5", "Illustrious", "SDXL", "SD1.5", "Other"],
+            // can use this format to separate text from actual values { text: "My first option", value: "first" }
+            defaultValue: "All",
+            attrs: {
+                editable: false,
+                filter: true,
+            },
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateSavedModelFilter(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
+            id: "LoRA Sidebar.General.batchSize",
+            name: "LoRA Loading Batch Size",
+            tooltip : 'How many LoRAs we load at once, for best performance with large collections set to just over 50% of your total amount. (i.e. for ~9600 set it to 5000)',
+            category: ["LoRA Sidebar", "General", "Batch Size"],
+            type: "slider",
+            defaultValue: 1000,
+            attrs: { 
+                min: 250,
+                max: 15000,
+                step: 250,
+            },
+            onChange: (newVal, oldVal) => {
+                if (app.loraSidebar && oldVal !== undefined) {
+                    app.loraSidebar.updateBatchSize(newVal);
+                }
+            },
+        },
+        {
             id: "LoRA Sidebar.General.catState",
             name: `Default Category State`,
             tooltip : 'Minimized is much faster if you have a LOT (1000s) of LoRAs',
+            category: ["LoRA Sidebar", "General", "Category State"],
             type: 'combo',
             options: ['Expanded', 'Minimized'],
             defaultValue: 'Expanded',
@@ -5018,78 +5104,78 @@ app.registerExtension({
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateCategoryState(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.favState",
             name: `Expand Favorites`,
             tooltip : 'Default Favorites to expanded regardless of other settings (Does not override manual toggle)',
+            category: ["LoRA Sidebar", "General", "Favorites"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateFavState(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.infoPersist",
             name: "Keep LoRA Info Open",
             tooltip : 'Keeps the LoRA Info Window Open Unless Manually Closed',
+            category: ["LoRA Sidebar", "General", "Info Persist"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateInfoPersist(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.a1111Style",
             name: "Use A1111 Lora Prompting",
             tooltip : 'If enabled, will add LoRA and Weight before trained words on drag and drop onto prompt nodes',
+            category: ["LoRA Sidebar", "General", "A1111 Style"],
             type: "boolean",
             defaultValue: false,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateA1111Style(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.useRG3",
             name: "Use rgthree Nodes",
             tooltip : 'Creates a Lora Power Loader Node on drag and drop vs a core node',
+            category: ["LoRA Sidebar", "General", "RG3"],
             type: "boolean",
             defaultValue: false,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateUseRG3(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.catNew",
             name: "Use New Category",
             tooltip : 'Automatically creates special category for LoRAs created 3 days ago or less. (NOT downloaded, but actually created)',
+            category: ["LoRA Sidebar", "General", "New Category"],
             type: "boolean",
             defaultValue: false, //TODO DEFAULTED TO FALSE UNTIL I FIX IT
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateCatNew(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.sortMethod",
             name: "Sort LoRAs By",
             tooltip : 'How LoRAs will be sorted, DateNewest will put the most recent files first. (By creation date)',
+            category: ["LoRA Sidebar", "General", "Sort Method"],
             type: 'combo',
             options: ['AlphaAsc', 'DateNewest', 'AlphaDesc', 'DateOldest'],
             defaultValue: 'AlphaAsc',
@@ -5097,13 +5183,13 @@ app.registerExtension({
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateSortMethod(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.sortModels",
             name: "Categorize LoRAs By",
             tooltip : 'Subdir uses your directory structure, Tags use model tags, either Custom or from CivitAI. For this change to take effect please refresh the broswer',
+            category: ["LoRA Sidebar", "General", "Sort Models"],
             type: 'combo',
             options: ['None', 'Subdir', 'Tags'],
             defaultValue: 'None',
@@ -5111,13 +5197,13 @@ app.registerExtension({
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateSortOrder(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.tagSource",
             name: "Category Tags to Use",
             tooltip : 'Custom will use tags frm the setting above. CivitAI uses the main site categories like Character, Clothing, Poses, etc.',
+            category: ["LoRA Sidebar", "General", "Tag Source"],
             type: 'combo',
             options: ['CivitAI', 'Custom'],
             defaultValue: 'CivitAI',
@@ -5125,25 +5211,26 @@ app.registerExtension({
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateTagSource(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.customTags",
             name: "Custom Category Tags",
             tooltip : 'Only used when sort is set to Tags and Tags is set to Custom. A comma seperated list of tags used to create categories, each Lora will only be assigned one category',
+            category: ["LoRA Sidebar", "General", "Custom Tags"],
             type: 'text',
             defaultValue: 'character, style, concept, clothing, poses, background',
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateTags(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.thumbnailSize",
             name: "LoRA Display Size",
+            tooltip : 'The size of the LoRA thumbnails in the sidebar',
+            category: ["LoRA Sidebar", "General", "Thumbnail Size"],
             type: "slider",
             defaultValue: 125,
             attrs: { min: 50, max: 400, step: 25, },
@@ -5151,27 +5238,13 @@ app.registerExtension({
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateLoraSize(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
-            id: "LoRA Sidebar.General.batchSize",
-            name: "LoRA Loading Batch Size",
-            tooltip : 'How many LoRAs we load at once, for best performance with large collections set to just over 50% of your total amount. (i.e. for ~9600 set it to 5000)',
-            type: "slider",
-            defaultValue: 1000,
-            attrs: { min: 250, max: 15000, step: 250, },
-            onChange: (newVal, oldVal) => {
-                if (app.loraSidebar && oldVal !== undefined) {
-                    app.loraSidebar.updateBatchSize(newVal);
-                }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.General.refreshAll",
             name: "Reprocess All LoRAs on Refresh",
             tooltip: "When enabled, forces all LoRAs to be reprocessed on the next refresh. Automatically disables after processing.",
+            category: ["LoRA Sidebar", "General", "Reprocess"],
             type: "boolean",
             defaultValue: false,
             onChange: (() => {
@@ -5216,67 +5289,65 @@ app.registerExtension({
                         }
                     }
                 };
-            })()
-        });
-
-        // SMART INFO STUFF
-
-        app.ui.settings.addSetting({
+            })(),
+        },
+        {
             id: "LoRA Sidebar.Smart Info.showTrained",
             name: "Trained Words on Canvas Previews",
             tooltip: "Display trained words under Canvas Preview images",
+            category: ["LoRA Sidebar", "Smart Info", "Trained Words"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.smartInfo.updateShowTrained(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.Smart Info.showSidebar",
             name: "LoRA Info in Sidebar",
             tooltip: "Automatically disaply LoRA Info when Sidebar is open",
+            category: ["LoRA Sidebar", "Smart Info", "Sidebar Info"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.smartInfo.updateShowSidebar(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
-            id: "LoRA Sidebar.Smart Info.canvasPreview",
+            },
+        },
+        {
+            id: "LoRA Sidebar.Smart Info.showCanvas",
             name: "LoRA Previews on Canvas",
             tooltip: "Display LoRA Previews on the Canvas",
+            category: ["LoRA Sidebar", "Smart Info", "Canvas Preview"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.smartInfo.updateShowOnCanvas(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
-            id: "LoRA Sidebar.Smart Info.menuPreview",
+            },
+        },
+        {
+            id: "LoRA Sidebar.Smart Info.showMenu",
             name: "LoRA Previews on Menus",
             tooltip: "Display LoRA preview images while using selection menus",
+            category: ["LoRA Sidebar", "Smart Info", "Menu Preview"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.smartInfo.updateShowOnMenu(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.Smart Info.zoomLevel",
             name: "Zoom Cutoff for Previews (in %)",
             tooltip: "Sets the zoom level where we turn off LoRA canvas previews",
+            category: ["LoRA Sidebar", "Smart Info", "Zoom Level"],
             type: "slider",
             defaultValue: 50,
             attrs: { min: 1, max: 100, step: 5, },
@@ -5286,17 +5357,16 @@ app.registerExtension({
                     debug.log("Updated Zoom:", newVal);
                 }
             },
-        });
-
-
-        let lastProcessed = { newVal: undefined, oldVal: undefined };
-        app.ui.settings.addSetting({
+        },
+        {
             id: "LoRA Sidebar.Smart Info.smartEnabled",
             name: "Smart Info Feature",
             tooltip: "Automagically show LoRA previews and info when working with LoRA nodes. (Disabling this will automatically Disable ALL other Smart Info features)",
+            category: ["LoRA Sidebar", "Smart Info", "Smart Enabled"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
+                let lastProcessed = { newVal: undefined, oldVal: undefined };
                 // Check if this change has already been processed
                 if (newVal === lastProcessed.newVal && oldVal === lastProcessed.oldVal) {
                     // This change has already been processed, skip
@@ -5314,41 +5384,39 @@ app.registerExtension({
                     app.loraSidebar.smartInfo.updateSettings(newVal);
                     app.loraSidebar.updateSmartEnabled(newVal);
                 }
-            }
-        });
-
-        // NSFW STUFF
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.NSFW.folderString",
             name: "NSFW Folder Name",
             tooltip : 'Name of the folder(s) to use for NSFW folder checks.',
+            category: ["LoRA Sidebar", "NSFW", "NSFW Folder String"],
             type: 'text',
             defaultValue: 'NSFW',
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateNSFWstring(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.NSFW.nsfwFolder",
             name: "Use NSFW Folders",
             tooltip : 'Flags LoRAs as NSFW if they are in a folder containing "NSFW" (Ignores saved NSFW Flags).',
+            category: ["LoRA Sidebar", "NSFW", "NSFW Folder"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateNSFWfolder(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.NSFW.nsfwLevel",
             name: "Max Allowed NSFW Level (50 Allows All Content)",
             tooltip : 'Calculates how NSFW a LoRA is using the CivitAI NSFW score of sample images',
+            category: ["LoRA Sidebar", "NSFW", "NSFW Level"],
             type: "slider",
             defaultValue: 25,
             attrs: { min: 1, max: 50, step: 1, },
@@ -5356,20 +5424,20 @@ app.registerExtension({
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateNSFWlevel(newVal);
                 }
-            }
-        });
-
-        app.ui.settings.addSetting({
+            },
+        },
+        {
             id: "LoRA Sidebar.NSFW.hideNSFW",
             name: "Show NSFW LoRAs",
             tooltip : 'Uses the CivitAI NSFW flags which are not very reliable',
+            category: ["LoRA Sidebar", "NSFW", "Show NSFW"],
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 if (app.loraSidebar && oldVal !== undefined) {
                     app.loraSidebar.updateShowNSFW(newVal);
                 }
-            }
-        });
-    },
+            },
+        },
+    ],
 });

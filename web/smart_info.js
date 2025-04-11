@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+const stores = app.getAppStores?.() || {};
 
 var debug = {
     enabled: false,
@@ -13,14 +14,15 @@ class LoraSmartInfo {
     constructor(loraSidebar) {
         this.sidebar = loraSidebar;
         this.app = loraSidebar.app;
+        this.canvasStore = stores.canvasStore;
+        this.settingStore = stores.settingStore;
 
-        this.enabled = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.smartEnabled", true);
-        this.showSidebar = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showSidebar", true);
-        this.showTrained = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showTrained", true);
-        this.zoomLevel = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.zoomLevel", 0.5);
-        this.showMenu = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showMenu", true);
-        this.showCanvas = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showCanvas", true);
-
+        this.enabled = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.smartEnabled', true);
+        this.showSidebar = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showSidebar', true);
+        this.showTrained = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showTrained', true);
+        this.zoomLevel = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.zoomLevel', 50);
+        this.showMenu = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showMenu', true);
+        this.showCanvas = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showCanvas', true);
         this.loraData = loraSidebar.loraData;
         this.currentHoverTimer = null;
         this.hoverDelay = 500;
@@ -35,6 +37,7 @@ class LoraSmartInfo {
         this.listenerActive = false;  // Track listener state
         this.graphMonitorInitialized = false;
         this.menuObserverInitialized = false;
+        this.activePreviewCleanup = null; // Add this property to track active preview
 
         if (this.enabled) {
             this.sidebar.showToast(
@@ -45,14 +48,21 @@ class LoraSmartInfo {
             if (this.app.graph) {
                 this.setupGraphMonitor();
                 this.graphMonitorInitialized = true;
+                debug.log("Graph monitor initialized");
             }
             
             // Set up observer for menu entries
             this.setupMenuObserver();
             this.menuObserverInitialized = true;
+            debug.log("Menu observer initialized");
+
+            // Initialize all features through updateSettings instead of calling directly
+            this.updateSettings(this.enabled);
+            debug.log("Selection listeners initialized");
+        } else {
+            // If not enabled, just call updateSettings with false
+            this.updateSettings(false);
         }
-        // global toggle
-        this.updateSettings(this.enabled);
     }
 
     updateSettings(newEnabled) {
@@ -63,12 +73,14 @@ class LoraSmartInfo {
             this.showTrained = false;
             this.showMenu = false;
             this.showCanvas = false;
+            this.removeComfyListeners();  // Clean up listeners
+            debug.log("Disabled all features");
         } else {
             // If enabled, restore user settings
-            this.showSidebar = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showSidebar", true);
-            this.showTrained = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showTrained", true);
-            this.showMenu = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showMenu", true);
-            this.showCanvas = this.app.ui.settings.getSettingValue("LoRA Sidebar.Smart Info.showCanvas", true);
+            this.showSidebar = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showSidebar', true);
+            this.showTrained = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showTrained', true);
+            this.showMenu = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showMenu', true);
+            this.showCanvas = app.extensionManager.setting.get('LoRA Sidebar.Smart Info.showCanvas', true);
             if (this.app.graph && !this.graphMonitorInitialized) {
                 this.setupGraphMonitor();
                 this.graphMonitorInitialized = true;
@@ -79,6 +91,11 @@ class LoraSmartInfo {
                 this.setupMenuObserver();
                 this.menuObserverInitialized = true;
             }
+            
+            // Add this line to ensure listeners are set up when enabled
+            this.setupComfyListeners();
+            
+            debug.log("Enabled all features");
         }
      }
 
@@ -101,255 +118,208 @@ class LoraSmartInfo {
     }
 
     setupComfyListeners() {
-        if (this.listenerActive) {
-            debug.log("Listeners already active, skipping setup");
+        debug.log("TEST: setupComfyListeners called");
+
+        const canvas = app.canvas;
+        if (!canvas) {
+            debug.log("TEST: Canvas not available through app");
             return;
         }
-    
-        this.comfyClickHandler = (e) => {
-            // Debug what was clicked
-            debug.log("Click target:", e.target);
+
+        // Clean up existing listener if any
+        if (this.listenerActive) {
+            debug.log("TEST: Removing existing listener");
+            canvas.onSelectionChange = canvas._original_onSelectionChange || null;
+        }
+
+        debug.log("TEST: Canvas found through app, setting up listener");
+        
+        // Store original handler
+        canvas._original_onSelectionChange = canvas.onSelectionChange;
+
+        canvas.onSelectionChange = (selectedNodes) => {
+            // Call original handler if it exists
+            if (canvas._original_onSelectionChange) {
+                canvas._original_onSelectionChange(selectedNodes);
+            }
+
+            debug.log("TEST: Selection changed!", selectedNodes);
             
-            // Look for any comfy elements
-            if (e.target.matches('[class*="comfyui-body"]') || 
-                e.target.closest('[class*="comfyui-body"]')) {
-                debug.log("Comfy element clicked:", e.target);
-                if (this.lastNodePreviewClear) {
-                    this.lastNodePreviewClear();
-                    this.lastNodePreviewClear = null;
-                    this.lastNode = null;
-                    this.lastLoraValue = null;
+            // Clear any existing preview
+            if (this.lastNodePreviewClear) {
+                this.lastNodePreviewClear();
+                this.lastNodePreviewClear = null;
+            }
+
+            // Handle object format of selected nodes
+            const nodes = [];
+            if (selectedNodes) {
+                if (Array.isArray(selectedNodes)) {
+                    nodes.push(...selectedNodes);
+                } else if (typeof selectedNodes === 'object') {
+                    nodes.push(...Object.values(selectedNodes));
+                } else {
+                    nodes.push(selectedNodes);
                 }
             }
+
+            nodes.forEach(node => {
+                if (!node) return;
+                debug.log("TEST: Selected node:", node.title, node.type, node);
+                
+                if (node.type === "LoraLoader" || node.type === "Power Lora Loader (rgthree)") {
+                    debug.log("TEST: LoRA node detected:", node);
+                    const widget = node.widgets?.find(w => w.name === "lora_name");
+                    if (widget) {
+                        const loraName = this.extractLoraName(widget, node);
+                        debug.log("TEST: LoRA name found:", loraName);
+                        if (loraName) {
+                            if (this.isSidebarOpen()) {
+                                this.showLoraInfo(loraName);
+                            } else {
+                                // Get node position in screen coordinates
+                                const rect = node.getBounding();
+                                const scale = canvas.ds.scale;
+                                const offset = canvas.ds.offset;
+                                
+                                // Calculate screen position
+                                const x = (rect[0] + offset[0]) * scale + canvas.canvas.offsetLeft;
+                                const y = (rect[1] + offset[1]) * scale + canvas.canvas.offsetTop;
+                                
+                                // Show preview next to node - PASS THE NODE!
+                                this.showPreviewOnCanvas(loraName, x, y, node)
+                                    .then(cleanupFunc => {
+                                        if (cleanupFunc) {
+                                            this.lastNodePreviewClear = cleanupFunc;
+                                        }
+                                    });
+                            }
+                        }
+                    }
+                }
+            });
         };
         
-        document.addEventListener('click', this.comfyClickHandler, true);
         this.listenerActive = true;
-        debug.log("Comfy UI listeners added to document");
+        debug.log("TEST: Listener setup complete");
     }
     
     removeComfyListeners() {
-        if (this.listenerActive && this.comfyClickHandler) {
-            document.removeEventListener('click', this.comfyClickHandler, true);
+        if (this.listenerActive && this.canvasStore?.canvas) {
+            this.canvasStore.canvas.removeEventListener('click', this.comfyClickHandler);
             this.comfyClickHandler = null;
             this.listenerActive = false;
-            debug.log("Comfy UI listeners removed from document");
         }
     }
 
     isEnabled() {
-        // Check current setting value
-        return this.app.ui.settings.getSettingValue("LoRA Sidebar.General.smartHover", true);
+        return this.settingStore?.get('LoRA Sidebar.General.smartHover', true) ?? true;
     }
 
-    async showPreviewOnCanvas(loraName, x, y, menuElement, nodeHeight, canvasScale) {
-        // Skip check if feature is disabled
-        if (!this.showCanvas) return false;
+    async showSimplePreview(loraName, x, y) {
+        debug.log('Showing simple preview:', {
+            loraName, x, y
+        });
 
-        debug.log("1. Starting preview for:", loraName);
+        // Clean up any existing preview first
+        if (this.activePreviewCleanup) {
+            this.activePreviewCleanup();
+            this.activePreviewCleanup = null;
+        }
+
         try {
-
-            // NODE PATH
-            if (!menuElement || !menuElement.appendChild) {
-
-                // Check if we already have a node preview with this ID
-                const existingPreview = document.querySelector(`[data-lora-preview="${loraName}"]`);
-                if (existingPreview) {
-                    return () => {}; // Return empty cleanup if already showing
-                }
-
-                // I HATE LISTENERS
-                this.setupComfyListeners();
-
-                const overlay = document.createElement('div');
-                overlay.className = 'litemenu-entry preview-container';
-                overlay.setAttribute('data-lora-preview', loraName);
-                overlay.style.position = 'fixed';
-                overlay.style.pointerEvents = 'none';
-                overlay.style.zIndex = '9999';
-                overlay.style.background = 'rgba(0,0,0,0.75)';
-                overlay.style.padding = '2px';
-                document.body.appendChild(overlay);
-
-                const response = await fetch(`/lora_sidebar/preview/${encodeURIComponent(loraName)}`);
-                if (!response.ok) return;
-                const img = new Image();
-                img.src = URL.createObjectURL(await response.blob());
-                
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                });
-
-                const maxSize = 256;
-                const scale = Math.min(maxSize / img.width, maxSize / img.height);
-                const width = img.width * scale;
-                const height = img.height * scale;
-
-                // Adjust the position based on the image size to make sure it's placed correctly
-                // For example, placing it to the left of the node and centered vertically
-                let scaledWidth = width;
-                let scaledHeight = height;
-
-                // scale down
-                if (nodeHeight !== null && nodeHeight < height){
-                    const scale = (nodeHeight / maxSize);
-                    scaledHeight = scale * height;
-                    scaledWidth = scale * width;
-                }
-
-                //scale up
-                if (nodeHeight !== null && nodeHeight > height){
-                    const extraHeight = nodeHeight - height;
-                    const scale = 1 + (0.5 * extraHeight) / height;
-                    scaledHeight = scale * height;
-                    scaledWidth = scale * width;
-                }
-
-                // Now position relative to the passed-in coordinates
-                const padding = 2;
-                const adjustedX = x - scaledWidth - padding;  // Place to the left of the node
-                const adjustedY = y - (scaledHeight / 2) - (30 * canvasScale);     // Center vertically on the node
-
-                debug.log("Setting node preview position:", {x, y});
-
-                // Direct positioning using passed coordinates
-                overlay.style.left = `${adjustedX}px`;
-                overlay.style.top = `${adjustedY}px`;
-                overlay.style.width = `${scaledWidth}px`;
-                overlay.style.height = `${scaledHeight}px`;
-
-                img.style.width = '100%';
-                img.style.height = '100%';
-                img.style.objectFit = 'contain';
-                overlay.appendChild(img);
-
-                // Add trained words if image is big enough
-                if (this.showTrained && scaledWidth >= maxSize * 0.2) {
-                    try {
-                        const infoResponse = await fetch(`/lora_sidebar/info/${encodeURIComponent(loraName)}`);
-                        if (infoResponse.ok) {
-                            const data = await infoResponse.json();
-                            if (data.status === "success" && 
-                                data.info?.trained_words?.length > 0) {
-                                const textElement = document.createElement('div');
-                                textElement.className = 'lora-preview-text';
-                                textElement.style.color = 'white';
-                                textElement.style.fontSize = '12px';
-                                textElement.style.textAlign = 'center';
-                                textElement.style.background = 'rgba(0,0,0,0.75)';
-                                textElement.style.padding = '2px 4px';
-                                textElement.style.marginTop = '2px';
-                                textElement.style.maxWidth = `${scaledWidth}px`;
-                                textElement.style.wordWrap = 'break-word';
-                                textElement.style.pointerEvents = 'all';
-                                textElement.style.userSelect = 'text';
-                                textElement.style.cursor = 'text';
-                                // Make sure clicks don't propagate up
-                                textElement.addEventListener('click', e => e.stopPropagation());
-                                textElement.addEventListener('mousedown', e => e.stopPropagation());
-                                textElement.textContent = data.info.trained_words[0];
-                                overlay.appendChild(textElement);
-                            }
-                        }
-                    } catch (error) {
-                        console.debug("Failed to fetch LoRA info:", error);
-                    }
-                }
-
-                return () => {
-                    if (overlay && overlay.parentElement) {
-                        overlay.parentElement.removeChild(overlay);
-                    }
-                    self.lastNode = null;
-                    self.lastLoraValue = null;
-                    this.removeComfyListeners();
-                };
+            // Get LoRA info
+            const response = await fetch(`/lora_sidebar/info/${encodeURIComponent(loraName)}`);
+            if (!response.ok) {
+                console.error('Failed to fetch LoRA info:', response.status);
+                return false;
             }
 
-            // MENU PATH
-            if (this.showMenu) {
+            const data = await response.json();
+            if (data.status !== "success" || !data.info) {
+                console.error('Invalid LoRA info response:', data);
+                return false;
+            }
+
+            // Create preview element
+            const previewElement = document.createElement('div');
+            previewElement.className = 'lora-preview-popup';
+            previewElement.style.position = 'fixed';
             
-                if (!menuElement.previewElement) {
-                    menuElement.previewElement = document.createElement('div');
-                    menuElement.previewElement.className = 'litemenu-entry preview-container';
-                    menuElement.previewElement.style.position = 'absolute';
-                    menuElement.previewElement.style.pointerEvents = 'none';
-                    menuElement.appendChild(menuElement.previewElement);
-                }
-
-                // Fetch and load image
-                const response = await fetch(`/lora_sidebar/preview/${encodeURIComponent(loraName)}`);
-                if (!response.ok) return;
-
-                const img = new Image();
-                img.src = URL.createObjectURL(await response.blob());
-                
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                });
-
-                // Calculate sizes
-                const maxSize = 512;
-                const scale = Math.min(maxSize / img.width, maxSize / img.height);
-                const width = img.width * scale;
-                const height = img.height * scale;
-
-                // Get menu position
-                const menuRect = menuElement.getBoundingClientRect();
-                const padding = 20;
-                const windowHeight = window.innerHeight;
-                
-                // Position to left of menu
-                menuElement.previewElement.style.left = `-${width + padding}px`;
-                
-                // Center in visible area or window, whichever is smaller
-                const visibleMenuHeight = Math.min(menuRect.height, windowHeight);
-                const topOffset = (visibleMenuHeight - height) / 2;
-                
-                // Clamp to ensure it stays in view
-                const clampedTop = Math.max(0, Math.min(topOffset, visibleMenuHeight - height));
-                menuElement.previewElement.style.top = `${clampedTop}px`;
-
-                menuElement.previewElement.style.width = `${width}px`;
-                menuElement.previewElement.style.height = `${height}px`;
-                menuElement.previewElement.style.background = 'rgba(0,0,0,0.8)';
-                menuElement.previewElement.style.padding = '5px';
-
-                // Set image to fill container
-                img.style.width = '100%';
-                img.style.height = '100%';
-                img.style.objectFit = 'contain';
-
-                // Clear any existing content
-                menuElement.previewElement.innerHTML = '';
-                menuElement.previewElement.appendChild(img);
-
-                // Make visible
-                menuElement.previewElement.style.display = 'block';
-
-                return () => {
-                    if (menuElement.previewElement) {
-                        menuElement.previewElement.style.display = 'none';
-                        menuElement.previewElement.innerHTML = '';
-                    }
-                    this.removeComfyListeners();
-                };
+            // Calculate position considering window boundaries
+            const padding = 20;
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            
+            // Add preview content
+            const content = this.createPreviewContent(data.info);
+            previewElement.innerHTML = content;
+            
+            // Add to document temporarily to get dimensions
+            previewElement.style.visibility = 'hidden';
+            document.body.appendChild(previewElement);
+            
+            // Get dimensions
+            const previewWidth = previewElement.offsetWidth;
+            const previewHeight = previewElement.offsetHeight;
+            
+            // Calculate position
+            let finalX = x + padding;
+            let finalY = y;
+            
+            // Adjust if would go off screen
+            if (finalX + previewWidth > windowWidth) {
+                finalX = x - previewWidth - padding;
             }
+            
+            if (finalY + previewHeight > windowHeight) {
+                finalY = windowHeight - previewHeight - padding;
+            }
+            
+            // Apply final position
+            previewElement.style.left = `${finalX}px`;
+            previewElement.style.top = `${finalY}px`;
+            previewElement.style.visibility = 'visible';
+            previewElement.style.zIndex = '10000';
+
+            // Create cleanup function
+            const cleanup = () => {
+                debug.log('Cleaning up preview');
+                if (previewElement && previewElement.parentNode) {
+                    previewElement.parentNode.removeChild(previewElement);
+                }
+                if (this.activePreviewCleanup === cleanup) {
+                    this.activePreviewCleanup = null;
+                }
+            };
+
+            // Store the active preview cleanup
+            this.activePreviewCleanup = cleanup;
+
+            return cleanup;
 
         } catch (error) {
-            this.removeComfyListeners();
-            console.error("Error showing preview:", error);
-            return null;
+            console.error('Error showing preview:', error);
+            return false;
         }
     }
 
     setupGraphMonitor() {
 
-        if (!this.enabled || !this.showCanvas) return;
+        if (!this.enabled || !this.showCanvas) {
+            debug.log(this.enabled, this.showCanvas);
+            return;
+        }
+
+        // Wait for canvas methods to be defined
+        if (!this.app.canvas.processNodeWidgets) {
+            setTimeout(() => this.setupGraphMonitor(), 100);
+            return;
+        }
 
         const self = this;
+        // Get actual LGraphCanvas instance
+        const actualCanvas = this.app.canvas;
         const origNodeMouse = LGraphCanvas.prototype.processNodeWidgets;
         const origShowMenu = LGraphCanvas.prototype.showContextMenu;
     
@@ -359,8 +329,7 @@ class LoraSmartInfo {
         debug.log("Graph:", this.app.graph);
         debug.log("Canvas:", this.app.canvas);
 
-        // Get actual LGraphCanvas instance
-        const actualCanvas = this.app.canvas;
+
 
         debug.log("Is LGraphCanvas?", actualCanvas instanceof LGraphCanvas);
         debug.log("Canvas properties:", Object.keys(actualCanvas));
@@ -632,6 +601,8 @@ class LoraSmartInfo {
                     }
                 }
             }
+
+            checkCanvasReady();
             
             return result;
         };
@@ -641,178 +612,156 @@ class LoraSmartInfo {
         if (!this.enabled || !this.showMenu) return;
 
         debug.log("Setting up menu observer");
-        let currentLoraWidget = null;
-        let searchTimeout = null;
-        let hasShownSearchMessage = false;
         const self = this;
-        const actualCanvas = this.app.canvas;
-    
-        // Store the last clicked widget/node that might spawn a menu
-        let lastClickedWidget = null;
-        let lastClickedNode = null;
 
-        // Add to your existing node click handler
-        const origNodeMouse = LGraphCanvas.prototype.processNodeWidgets;
-        LGraphCanvas.prototype.processNodeWidgets = function(node, pos, event, active_widget) {
-            const result = origNodeMouse.call(this, node, pos, event, active_widget);
-            
-            // Store widget info when clicked
-            if (node && event?.type === "pointerdown") {
-                const widget = node.widgets?.find(w => {
-                    const isLoraName = w.name === "lora_name";
-                    const isLoraNumbered = w.name.match(/^lora_\d+$/);
-                    const isRgthreeLora = node.type === "Power Lora Loader (rgthree)" && 
-                                        w.name === "string" && 
-                                        w.value && 
-                                        typeof w.value === 'object' && 
-                                        'lora' in w.value;
-                    
-                    return isLoraName || isLoraNumbered || isRgthreeLora;
-                });
-
-                if (widget) {
-                    lastClickedWidget = widget;
-                    lastClickedNode = node;
-                } else {
-                    lastClickedWidget = null;
-                    lastClickedNode = null;
+        // Hook directly into ContextMenu creation
+        const origContextMenu = LiteGraph.ContextMenu;
+        LiteGraph.ContextMenu = function(values, options) {
+            // Debug the full structure
+            debug.log("ContextMenu called with:", {
+                values: values?.slice(0, 3), // First 3 items for brevity
+                options: {
+                    callback: options?.callback ? "function present" : "no callback",
+                    event: options?.event ? options.event.type : "no event",
+                    node: options?.node ? {
+                        type: options.node.type,
+                        widgets: options.node.widgets?.map(w => ({
+                            name: w.name,
+                            type: w.type,
+                            value: w.value
+                        }))
+                    } : "no node"
                 }
+            });
+
+            // Check if this is a file selection menu for LoRAs
+            const isLoraMenu = values?.some(v => 
+                typeof v === 'string' && 
+                v.toLowerCase().includes('.safetensors')
+            );
+
+            debug.log("Menu analysis:", {
+                isLoraMenu,
+                valueCount: values?.length,
+                firstValue: values?.[0],
+                menuType: 'contextmenu'
+            });
+
+            if (isLoraMenu) {
+                debug.log("LoRA menu detected - creating menu");
+                const menu = new origContextMenu(values, options);
+                const menuElement = menu.root;
+
+                // Process menu items once created
+                setTimeout(() => {
+                    const cleanup = handleMenuItems(menuElement);
+                    
+                    // Watch for menu removal
+                    const menuRemovalObserver = new MutationObserver((mutations) => {
+                        mutations.forEach(mutation => {
+                            mutation.removedNodes.forEach(node => {
+                                if (node === menuElement) {
+                                    if (cleanup) cleanup();
+                                    menuRemovalObserver.disconnect();
+                                    debug.log("Menu removed, cleanup complete");
+                                }
+                            });
+                        });
+                    });
+
+                    menuRemovalObserver.observe(menuElement.parentNode, {
+                        childList: true
+                    });
+                }, 0);
+
+                return menu;
             }
-            return result;
+
+            return new origContextMenu(values, options);
         };
 
-        // Menu mutation observer
-        const menuWatcher = new MutationObserver((mutations) => {
-            mutations.forEach(mutation => {
-                mutation.addedNodes.forEach(node => {
-                    if (node.classList?.contains('litecontextmenu')) {
-                        // Clear any existing preview
-                        if (self.lastNodePreviewClear) {
-                            debug.log("Menu appeared, clearing preview");
-                            self.lastNodePreviewClear();
-                            self.lastNodePreviewClear = null;
-                            self.lastNode = null;
-                            self.lastLoraValue = null;
-                        }
-
-                        let cleanup = null;
-
-                        // Check if this menu is from our last clicked LoRA widget
-                        if (lastClickedWidget) {
-                            debug.log("Menu from LoRA widget:", lastClickedWidget.name);
-                            
-                            // Your existing filter input handler
-                            const filterInput = node.querySelector('.comfy-context-menu-filter');
-                            if (filterInput) {
-                                filterInput.addEventListener('input', (e) => {
-                                    if (searchTimeout) {
-                                        clearTimeout(searchTimeout);
-                                    }
-                                    searchTimeout = setTimeout(() => {
-                                        if (cleanup) cleanup();
-                                        cleanup = handleMenuItems(node);
-                                    }, 50);
-                                });
-                            }
-
-                            // Initial setup of menu items
-                            cleanup = handleMenuItems(node);
-
-                            // Your existing cleanup observer
-                            const menuRemovalObserver = new MutationObserver((removeMutations) => {
-                                removeMutations.forEach(mutation => {
-                                    mutation.removedNodes.forEach(removedNode => {
-                                        if (removedNode === node) {
-                                            if (cleanup) cleanup();
-                                            menuRemovalObserver.disconnect();
-                                            if (searchTimeout) {
-                                                clearTimeout(searchTimeout);
-                                            }
-                                            // Clear last clicked tracking
-                                            lastClickedWidget = null;
-                                            lastClickedNode = null;
-                                        }
-                                    });
-                                });
-                            });
-
-                            menuRemovalObserver.observe(node.parentNode, {
-                                childList: true
-                            });
-                        }
-                    }
-                });
-            });
-        });
-    
         const handleMenuItems = (menuElement) => {
-            const menuItems = menuElement.querySelectorAll('.litemenu-entry[data-value]');
-            menuItems.forEach(item => {
+            debug.log("Processing menu items in:", menuElement);
+            
+            // Fix pointer-events on the menu container
+            menuElement.style.pointerEvents = 'auto';
+            
+            const items = menuElement.querySelectorAll('.litemenu-entry');
+            debug.log(`Found ${items.length} menu items`);
+
+            items.forEach(item => {
+                const dataValue = item.getAttribute('data-value');
+                debug.log("Menu item:", {
+                    text: item.textContent,
+                    dataValue,
+                    className: item.className
+                });
+
+                if (!dataValue?.toLowerCase().includes('.safetensors')) return;
+
+                item.style.pointerEvents = 'auto';
+
                 let clearPreview = null;
                 
-                // Simple hover handler
-                item._loraHoverHandler = (e) => {
-                    if (this.menuDebounceTimer) {
-                        clearTimeout(this.menuDebounceTimer);
+                const mouseEnterHandler = (e) => {
+                    debug.log("Mouse enter on LoRA item:", dataValue);
+                    if (self.menuDebounceTimer) {
+                        clearTimeout(self.menuDebounceTimer);
                     }
-                
-                    this.menuDebounceTimer = setTimeout(async () => {
-                        const loraName = item.dataset.value;
-                        if (loraName?.includes('.safetensors')) {
-                            const cleanName = loraName.split('\\').pop().replace(/\.[^/.]+$/, '');
-                            
-                            if (this.isSidebarOpen()) {
-                                this.showLoraInfo(cleanName);
-                            } else {
-                                if (clearPreview) {
-                                    clearPreview();
-                                    clearPreview = null;
-                                }
-                                
-                                clearPreview = await this.showPreviewOnCanvas(
-                                    cleanName,
-                                    e.clientX,
-                                    e.clientY,
-                                    menuElement,
-                                    null,
-                                    1
-                                );
+
+                    self.menuDebounceTimer = setTimeout(async () => {
+                        const cleanName = dataValue.split('\\').pop().replace(/\.[^/.]+$/, '');
+                        
+                        if (self.isSidebarOpen()) {
+                            self.showLoraInfo(cleanName);
+                        } else {
+                            if (clearPreview) {
+                                clearPreview();
+                                clearPreview = null;
                             }
+                            
+                            clearPreview = await self.showSimplePreview(
+                                cleanName,
+                                e.clientX,
+                                e.clientY
+                            );
                         }
-                    }, this.menuDebounceDelay);
+                    }, self.menuDebounceDelay);
                 };
-    
-                // Simple mouseout handler
-                item._loraOutHandler = () => {
-                    if (this.menuDebounceTimer) {
-                        clearTimeout(this.menuDebounceTimer);
-                        this.menuDebounceTimer = null;
+
+                const mouseLeaveHandler = () => {
+                    debug.log("Mouse leave LoRA item:", dataValue);
+                    if (self.menuDebounceTimer) {
+                        clearTimeout(self.menuDebounceTimer);
+                        self.menuDebounceTimer = null;
+                    }
+                    if (clearPreview) {
+                        clearPreview();
+                        clearPreview = null;
                     }
                 };
-    
-                // Add listeners
-                item.addEventListener('mouseover', item._loraHoverHandler);
-                item.addEventListener('mouseout', item._loraOutHandler);
+
+                item.addEventListener('mouseenter', mouseEnterHandler);
+                item.addEventListener('mouseleave', mouseLeaveHandler);
+                
+                // Store handlers for cleanup
+                item._handlers = {
+                    enter: mouseEnterHandler,
+                    leave: mouseLeaveHandler
+                };
             });
-    
-            // Return cleanup function
+
             return () => {
-                menuItems.forEach(item => {
-                    if (item._loraHoverHandler) {
-                        item.removeEventListener('mouseover', item._loraHoverHandler);
-                        item.removeEventListener('mouseout', item._loraOutHandler);
-                        delete item._loraHoverHandler;
-                        delete item._loraOutHandler;
+                debug.log("Cleaning up menu items");
+                items.forEach(item => {
+                    if (item._handlers) {
+                        item.removeEventListener('mouseenter', item._handlers.enter);
+                        item.removeEventListener('mouseleave', item._handlers.leave);
+                        delete item._handlers;
                     }
                 });
             };
         };
-    
-        // Start observing
-        menuWatcher.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
     }
 
     extractLoraName(widget, node) {
@@ -969,6 +918,88 @@ class LoraSmartInfo {
     updateShowSidebar(newVal) {
         this.showSidebar = newVal;
         debug.log("Updated showSidebar:", this.showSidebar);
+    }
+
+    async showPreviewOnCanvas(loraName, x, y, node) {
+        if (!node) {
+            console.error("Node object is required for preview positioning");
+            return null;
+        }
+
+        // Check zoom level first
+        const currentZoom = app.canvas.ds.scale;
+        if (currentZoom < (this.zoomLevel / 100)) {
+            debug.log("Zoom too far out for preview, current:", currentZoom, "threshold:", this.zoomLevel / 100);
+            return null;
+        }
+
+        try {
+            const response = await fetch(`/lora_sidebar/info/${encodeURIComponent(loraName)}`);
+            if (!response.ok) return null;
+            
+            const data = await response.json();
+            if (data.status !== "success" || !data.info) return null;
+
+            // Create preview element
+            const previewElement = document.createElement('div');
+            previewElement.className = 'lora-preview-popup';
+            
+            // Get node dimensions using getBounding()
+            const rect = node.getBounding();
+            const nodeHeight = rect[3];  // rect[3] is height
+            
+            // Calculate max preview size based on node height
+            const maxPreviewSize = Math.min(256, nodeHeight * 1.5);
+            
+            // Get preview URL and prepare content
+            const filename = data.info.path.split('\\').pop().replace('.safetensors', '');
+            const previewUrl = `/lora_sidebar/preview/${encodeURIComponent(filename)}?cb=${Date.now()}`;
+
+            // Prepare trained words section if enabled
+            let trainedWordsHtml = '';
+            if (this.showTrained && data.info.trained_words?.length > 0) {
+                trainedWordsHtml = `
+                    <div class="text-sm mt-2 opacity-70">
+                        <div class="font-bold">Trained Words:</div>
+                        <div class="italic">${data.info.trained_words.join(', ')}</div>
+                    </div>
+                `;
+            }
+
+            // Add content with size-constrained image
+            previewElement.innerHTML = `
+                <div class="p-panel-content">
+                    <img src="${previewUrl}" alt="${data.info.name}" style="max-width: ${maxPreviewSize}px; max-height: ${maxPreviewSize}px;">
+                    <div class="mt-2">
+                        <div class="font-bold">${data.info.name}</div>
+                        ${data.info.description ? `<div class="text-sm opacity-80">${data.info.description}</div>` : ''}
+                        ${data.info.trigger_phrase ? `<div class="text-sm opacity-70 italic">Trigger: ${data.info.trigger_phrase}</div>` : ''}
+                        ${trainedWordsHtml}
+                    </div>
+                </div>
+            `;
+            
+            const previewWidth = maxPreviewSize + 27; // Add some padding for the container
+            const gap = 5; // Reduced gap by 20%
+            
+            // Position preview to the left of the node with adjusted gap
+            previewElement.style.position = 'fixed';
+            previewElement.style.left = `${x - previewWidth - gap}px`;
+            previewElement.style.top = `${y}px`;
+            previewElement.style.zIndex = '9999';
+            
+            document.body.appendChild(previewElement);
+
+            return () => {
+                if (previewElement && previewElement.parentNode) {
+                    previewElement.parentNode.removeChild(previewElement);
+                }
+            };
+
+        } catch (error) {
+            console.error('Error showing preview:', error);
+            return null;
+        }
     }
 
 }

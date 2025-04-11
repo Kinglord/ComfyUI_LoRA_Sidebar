@@ -913,6 +913,64 @@
     background-color: rgba(76, 175, 80, 0.2);
 }
 
+.lora-preview-popup {
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    padding: 12px;
+    width: 100%;
+    max-width: 256px; /* Ensure it doesn't grow */
+}
+
+.lora-preview-popup .p-panel-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+}
+
+.lora-preview-popup img {
+    display: block;
+    border-radius: 4px;
+}
+
+.lora-preview-popup .mt-2 {
+    margin-top: 0.75rem;
+    width: 100%;
+}
+
+.lora-preview-popup .text-sm {
+    width: 100%;
+    margin-top: 0.5rem;
+    word-wrap: break-word; /* Ensure text wraps */
+    overflow-wrap: break-word;
+}
+
+.lora-preview-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.lora-preview-info .lora-name {
+    font-weight: bold;
+    color: var(--fg-color);
+}
+
+.lora-preview-info .lora-description {
+    font-size: 0.9em;
+    color: var(--fg-color);
+    opacity: 0.8;
+}
+
+.lora-preview-info .lora-trigger {
+    font-size: 0.9em;
+    color: var(--fg-color);
+    opacity: 0.7;
+    font-style: italic;
+}
 
 
 .description-icon {
