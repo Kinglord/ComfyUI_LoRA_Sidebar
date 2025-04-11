@@ -839,6 +839,7 @@ async def get_lora_preview(request):
             '.png': 'image/png',
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
+            '.webp': 'image/webp',
             '.mp4': 'video/mp4',
             '.webm': 'video/webm'
         }
@@ -846,7 +847,7 @@ async def get_lora_preview(request):
     
     # Look in managed folder
     lora_folder = os.path.join(LORA_DATA_DIR, lora_name)
-    for ext in ['.jpg', '.png', '.jpeg', '.mp4', '.webm']:
+    for ext in ['.jpg', '.png', '.jpeg', '.webp', '.mp4', '.webm']:
         preview_path = os.path.join(lora_folder, f"preview{ext}")
         if os.path.exists(preview_path):
             return web.FileResponse(
@@ -862,7 +863,7 @@ async def get_lora_preview(request):
             logger.info(f"Loading info for {lora_name}: local_metadata={info.get('local_metadata')}, path={info.get('path')}")
             if info.get("local_metadata") and info.get("path"):
                 base_path = os.path.splitext(info["path"])[0]
-                for ext in ['.preview.png', '.preview.jpg', '.preview.jpeg', '.preview.mp4', '.preview.webm']:
+                for ext in ['.preview.png', '.preview.jpg', '.preview.jpeg', '.preview.webp', '.preview.mp4', '.preview.webm']:
                     preview_path = f"{base_path}{ext}"
                     if os.path.exists(preview_path):
                         return web.FileResponse(
