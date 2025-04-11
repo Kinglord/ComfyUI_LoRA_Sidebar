@@ -1,6 +1,6 @@
 # ComfyUI_LoRA_Sidebar
 ### WE'RE BACK BABY!
-Not a lot of feature updates (none, actually) but it's WORKING AGAIN in ComfyUI Frontend 1.14.6 - lets hope there's not a another total refactor in 3 months 😂
+Not a lot of feature updates (none, actually) but it's WORKING AGAIN in ComfyUI Frontend 1.14.6 - lets hope there's not a another major refactor in 3 months 😂
 
 ![image](https://media1.tenor.com/m/2lMoNRA0o5QAAAAC/megamind-metroman.gif)
 
