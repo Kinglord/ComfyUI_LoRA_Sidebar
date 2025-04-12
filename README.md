@@ -5,7 +5,7 @@ Not a lot of feature updates (none, actually) but it's WORKING AGAIN in ComfyUI 
 ![image](https://media1.tenor.com/m/2lMoNRA0o5QAAAAC/megamind-metroman.gif)
 
 ## What is this?
-A custom front-end UX node that creates a visual library of all your LoRAs. It's designed to be fast, slim, and make using LoRAs in Comfy a lot more fun for visual users - especially if you have lots of LoRAs. Should make people used to A1111 and other UI heavy platforms feel more at home. If you've got lots of LoRAs, this sidebar could be your new best friend!
+A custom front-end UX node that creates a visual library of all your LoRAs. It's designed to be fast, accessible, and make using LoRAs in Comfy a lot more fun for visual users - especially if you have lots of LoRAs. Lives right in the sidebar, no complex manager or additional windows and endpoints to juggle. Should make people used to A1111 and other UI heavy platforms feel more at home. If you've got lots of LoRAs, this sidebar could be your new best friend!
 
 ![image](https://github.com/user-attachments/assets/a1140952-2342-4c92-8f50-32067b2e2e0f)
 
