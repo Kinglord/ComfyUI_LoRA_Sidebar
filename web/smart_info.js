@@ -166,10 +166,40 @@ class LoraSmartInfo {
             nodes.forEach(node => {
                 if (!node) return;
                 debug.log("TEST: Selected node:", node.title, node.type, node);
+                debug.log("TEST: Node widgets:", node.widgets); // Add this debug line
                 
                 if (node.type === "LoraLoader" || node.type === "Power Lora Loader (rgthree)") {
                     debug.log("TEST: LoRA node detected:", node);
-                    const widget = node.widgets?.find(w => w.name === "lora_name");
+                    let widget;
+                    
+                    if (node.type === "Power Lora Loader (rgthree)") {
+                        // Log all widgets to see their structure
+                        node.widgets?.forEach((w, index) => {
+                            debug.log(`TEST: Widget ${index}:`, {
+                                name: w.name,
+                                type: w.type,
+                                value: w.value
+                            });
+                        });
+
+                        // Modified widget search for Power Lora
+                        widget = node.widgets?.find(w => {
+                            // Check if the widget has a value that might contain lora data
+                            const hasLoraData = w.value && 
+                                typeof w.value === 'object' &&
+                                (w.value.lora || 
+                                 (Array.isArray(w.value) && w.value.length > 0));
+                            
+                            debug.log(`TEST: Checking widget:`, w.name, hasLoraData);
+                            return hasLoraData;
+                        });
+                        
+                        debug.log("TEST: Power Lora widget found:", widget);
+                    } else {
+                        // For standard LoRA nodes
+                        widget = node.widgets?.find(w => w.name === "lora_name");
+                    }
+
                     if (widget) {
                         const loraName = this.extractLoraName(widget, node);
                         debug.log("TEST: LoRA name found:", loraName);
@@ -798,6 +828,11 @@ class LoraSmartInfo {
             
             // If it's an object, try different known properties
             if (typeof value === 'object') {
+                // For Power Lora Loader, just get the filename from the lora path
+                if (node?.type === "Power Lora Loader (rgthree)" && value.lora) {
+                    return value.lora;
+                }
+
                 if (value.content) return value.content;
                 if (value.lora) return value.lora;
                 if (value.string) return value.string;

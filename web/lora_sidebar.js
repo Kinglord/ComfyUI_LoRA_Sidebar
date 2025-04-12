@@ -202,7 +202,7 @@ class LoraSidebar {
     }
 
     createModelFilterDropdown() {
-        const filterOptions = ['All', 'Pony', 'Flux', 'SD 3.5', 'Illustrious', 'SDXL', 'SD 1.5', 'Custom + Other'];
+        const filterOptions = ['All', 'Pony', 'Flux', 'SD 3.5', 'Illustrious', 'NoobAI', 'SDXL', 'SD 1.5', 'Wan Video', 'Hunyuan Video', 'Custom + Other'];
         const dropdown = $el("select.model-filter-dropdown", {
             onchange: (e) => this.handleModelFilter(e.target.value)
         });
@@ -470,8 +470,14 @@ class LoraSidebar {
                 return baseModel.includes('sdxl');
             case 'SD 1.5':
                 return baseModel.includes('sd') && baseModel.includes('1.5');
+            case 'NoobAI':
+                return baseModel.includes('noobai');
+            case 'Wan Video':
+                return baseModel.includes('wan video');
+            case 'Hunyuan Video':
+                return baseModel.includes('hunyuan video');
             case 'Custom + Other':
-                return !['pony', 'flux', 'sdxl', 'illustrious'].some(model => baseModel.includes(model)) &&
+                return !['pony', 'flux', 'sdxl', 'illustrious', 'noobai', 'wan video', 'hunyuan video'].some(model => baseModel.includes(model)) &&
                 !(baseModel.includes('sd') && (baseModel.includes('1.5') || baseModel.includes('3.5')));
             default:
                 return true;
@@ -2462,7 +2468,8 @@ class LoraSidebar {
             const widget = node.addNewLoraWidget();
 
             const weight = loraData.reco_weight ?? 1;
-            const loraPath = this.loraPathCalc(loraData);
+            // const loraPath = this.loraPathCalc(loraData); works on linux but is a hack so turning off, TODO - fix this properly
+            const loraPath = loraData.subdir ? `${loraData.subdir}\\${loraData.filename}` : loraData.filename;
 
             widget.value = {
                 on: true,
@@ -2473,7 +2480,7 @@ class LoraSidebar {
 
             widget.loraInfo = {
                 file: loraData.filename.split("/").pop(), // Ensure we get just the filename
-                path: loraPath,
+                path: loraData.subdir,
                 images: [],
             };
 
@@ -5072,7 +5079,7 @@ app.registerExtension({
             name: "Base Models to Show",
             category: ["LoRA Sidebar", "General", "Model Filter"],
             type: "combo",
-            options: ["All", "Pony", "Flux", "SD 3.5", "Illustrious", "SDXL", "SD1.5", "Other"],
+            options: ["All", "Pony", "Flux", "SD 3.5", "Illustrious", "NoobAI", "SDXL", "SD1.5", "Wan Video", "Hunyuan Video", "Other"],
             // can use this format to separate text from actual values { text: "My first option", value: "first" }
             defaultValue: "All",
             attrs: {
