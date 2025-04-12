@@ -14,8 +14,9 @@ A custom front-end UX node that creates a visual library of all your LoRAs. It's
 - SURPRISE
 - Updated the plugin to work again with newer FE builds of ComfyUI, tested and working on FE 1.14.6 (probably still some bugs)
 - Added something for scroll memory that works OKish
-- Supported added for webp files
-- Fixed some linux file handling
+- Support added for webp files
+- Added filter support for NoobAI, WAN & Hunyuan Video LORAs
+- Fixed some linux file handling (still WIP, redoing how filepaths are handled, if you see weird filepaths in LORAs refresh the Lora and it SHOULD fix it)
 #### 11/23/24
 - Wow, not even I was prepared for this update
 - Added all new "Smart Info" feature, empowering your ComfyUI experience without even opening the sidebar. Game Changer 🤯
