@@ -2,7 +2,7 @@ import { app } from "../../scripts/app.js";
 const stores = app.getAppStores?.() || {};
 
 var debug = {
-    enabled: true,
+    enabled: false,
     log: function(...args) {
         if (this.enabled) {
             console.log(...args);
@@ -138,13 +138,32 @@ class LoraSmartInfo {
         canvas._original_onSelectionChange = canvas.onSelectionChange;
 
         canvas.onSelectionChange = (selectedNodes) => {
+            
             // Call original handler if it exists
             if (canvas._original_onSelectionChange) {
                 canvas._original_onSelectionChange(selectedNodes);
             }
 
-            debug.log("TEST: Selection changed!", selectedNodes);
+            // Convert selection to array of node IDs
+            const currentNodeIds = Array.isArray(selectedNodes) ? selectedNodes.map(n => n.id) : 
+                                 typeof selectedNodes === 'object' ? Object.values(selectedNodes).map(n => n.id) : 
+                                 selectedNodes ? [selectedNodes.id] : [];
             
+            // Compare with last selection using node IDs
+            const lastNodeIds = this._lastSelectedNodeIds || [];
+            
+            const selectionChanged = currentNodeIds.length !== lastNodeIds.length ||
+                                   currentNodeIds.some(id => !lastNodeIds.includes(id));
+            
+            if (!selectionChanged) {
+                debug.log("TEST: Selection hasn't changed (same node IDs), ignoring");
+                return;
+            }
+
+            // Update our last selection tracking
+            this._lastSelectedNodeIds = currentNodeIds;
+            debug.log("TEST: Selection changed! New IDs:", currentNodeIds);
+
             // Clear any existing preview
             if (this.lastNodePreviewClear) {
                 this.lastNodePreviewClear();
@@ -191,10 +210,10 @@ class LoraSmartInfo {
                             (w.value.lora || 
                                 (Array.isArray(w.value) && w.value.length > 0));
                         
-                        debug.log(`TEST: Checking widget:`, w.name, hasLoraData);
-                        debug.log("TEST: Power Lora widget found:", widget);
+                        debug.log(`TEST: Checking widget:`, w.name, w.value);
                         return hasLoraData;
                     });
+                    debug.log("TEST: Power Lora widget found:", widget?.name, widget?.value);
                 }
                 // Finally check Power Prompt
                 else if (node.type === "Power Prompt (rgthree)") {
@@ -218,6 +237,22 @@ class LoraSmartInfo {
                         if (this.isSidebarOpen()) {
                             this.showLoraInfo(loraName);
                         } else {
+                            // Early exit if it's the same node and we already have a preview
+                            if (node === this.lastNode && this.lastNodePreviewClear) {
+                                debug.log("Same node selected with existing preview, skipping");
+                                return;
+                            }
+
+                            // Clean up any existing preview before showing new one
+                            if (this.lastNodePreviewClear) {
+                                this.lastNodePreviewClear();
+                                this.lastNodePreviewClear = null;
+                            }
+
+                            // Update tracking
+                            this.lastNode = node;
+                            debug.log("This is our last node:", this.lastNode);
+                            
                             // Get node position in screen coordinates
                             const rect = node.getBounding();
                             const scale = canvas.ds.scale;
@@ -227,7 +262,7 @@ class LoraSmartInfo {
                             const x = (rect[0] + offset[0]) * scale + canvas.canvas.offsetLeft;
                             const y = (rect[1] + offset[1]) * scale + canvas.canvas.offsetTop;
                             
-                            // Show preview next to node - PASS THE NODE!
+                            // Show preview next to node
                             this.showPreviewOnCanvas(loraName, x, y, node)
                                 .then(cleanupFunc => {
                                     if (cleanupFunc) {
