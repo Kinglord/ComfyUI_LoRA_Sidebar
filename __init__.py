@@ -2055,6 +2055,7 @@ async def set_preview_image(request):
                     
                     # Remove any existing preview files
                     preview_dir = os.path.join(LORA_DATA_DIR, lora_id)
+                    os.makedirs(preview_dir, exist_ok=True)  # Ensure directory exists
                     for filepath in glob.glob(os.path.join(preview_dir, 'preview.*')):
                         os.remove(filepath)
                     
@@ -2181,6 +2182,12 @@ async def refresh_lora(request):
                         version_info['images'] = remote_info['images']
             else:
                 version_info = await fetch_version_info_by_id(session, version_id, skip_rate_limit=True)
+                if not version_info:
+                    logger.warning(f"Failed to fetch version info for {version_id}, keeping existing data")
+                    return web.json_response({
+                        "status": "success",
+                        "data": existing_info
+                    })
 
             # Initialize updates dictionary
             updates = {}

@@ -165,65 +165,75 @@ class LoraSmartInfo {
 
             nodes.forEach(node => {
                 if (!node) return;
+
+                // Early exit if not a node type we care about
+                if (node.type !== "LoraLoader" && 
+                    node.type !== "Power Lora Loader (rgthree)" && 
+                    node.type !== "Power Prompt (rgthree)") {
+                    return;
+                }
+
                 debug.log("TEST: Selected node:", node.title, node.type, node);
                 debug.log("TEST: Node widgets:", node.widgets); // Add this debug line
                 
-                if (node.type === "LoraLoader" || node.type === "Power Lora Loader (rgthree)") {
-                    debug.log("TEST: LoRA node detected:", node);
-                    let widget;
-                    
-                    if (node.type === "Power Lora Loader (rgthree)") {
-                        // Log all widgets to see their structure
-                        node.widgets?.forEach((w, index) => {
-                            debug.log(`TEST: Widget ${index}:`, {
-                                name: w.name,
-                                type: w.type,
-                                value: w.value
-                            });
-                        });
+                let widget;
 
-                        // Modified widget search for Power Lora
-                        widget = node.widgets?.find(w => {
-                            // Check if the widget has a value that might contain lora data
-                            const hasLoraData = w.value && 
-                                typeof w.value === 'object' &&
-                                (w.value.lora || 
-                                 (Array.isArray(w.value) && w.value.length > 0));
-                            
-                            debug.log(`TEST: Checking widget:`, w.name, hasLoraData);
-                            return hasLoraData;
-                        });
+                // Handle the common cases first
+                if (node.type === "LoraLoader") {
+                    widget = node.widgets?.find(w => w.name === "lora_name");
+                }
+                else if (node.type === "Power Lora Loader (rgthree)") {
+                    // Modified widget search for Power Lora
+                    widget = node.widgets?.find(w => {
+                        // Check if the widget has a value that might contain lora data
+                        const hasLoraData = w.value && 
+                            typeof w.value === 'object' &&
+                            (w.value.lora || 
+                                (Array.isArray(w.value) && w.value.length > 0));
                         
+                        debug.log(`TEST: Checking widget:`, w.name, hasLoraData);
                         debug.log("TEST: Power Lora widget found:", widget);
-                    } else {
-                        // For standard LoRA nodes
-                        widget = node.widgets?.find(w => w.name === "lora_name");
+                        return hasLoraData;
+                    });
+                }
+                // Finally check Power Prompt
+                else if (node.type === "Power Prompt (rgthree)") {
+                    widget = node.widgets?.find(w => w.name === "prompt");
+                    if (widget?.value) {
+                        const promptText = widget.value || widget.getValue?.() || '';
+                        const loraMatch = promptText.match(/<lora:([^:]+):/);
+                        if (loraMatch) {
+                            widget = {
+                                value: loraMatch[1],
+                                name: "lora_name"
+                            };
+                        }
                     }
-
-                    if (widget) {
-                        const loraName = this.extractLoraName(widget, node);
-                        debug.log("TEST: LoRA name found:", loraName);
-                        if (loraName) {
-                            if (this.isSidebarOpen()) {
-                                this.showLoraInfo(loraName);
-                            } else {
-                                // Get node position in screen coordinates
-                                const rect = node.getBounding();
-                                const scale = canvas.ds.scale;
-                                const offset = canvas.ds.offset;
-                                
-                                // Calculate screen position
-                                const x = (rect[0] + offset[0]) * scale + canvas.canvas.offsetLeft;
-                                const y = (rect[1] + offset[1]) * scale + canvas.canvas.offsetTop;
-                                
-                                // Show preview next to node - PASS THE NODE!
-                                this.showPreviewOnCanvas(loraName, x, y, node)
-                                    .then(cleanupFunc => {
-                                        if (cleanupFunc) {
-                                            this.lastNodePreviewClear = cleanupFunc;
-                                        }
-                                    });
-                            }
+                }
+                    
+                if (widget) {
+                    const loraName = this.extractLoraName(widget, node);
+                    debug.log("TEST: LoRA name found:", loraName);
+                    if (loraName) {
+                        if (this.isSidebarOpen()) {
+                            this.showLoraInfo(loraName);
+                        } else {
+                            // Get node position in screen coordinates
+                            const rect = node.getBounding();
+                            const scale = canvas.ds.scale;
+                            const offset = canvas.ds.offset;
+                            
+                            // Calculate screen position
+                            const x = (rect[0] + offset[0]) * scale + canvas.canvas.offsetLeft;
+                            const y = (rect[1] + offset[1]) * scale + canvas.canvas.offsetTop;
+                            
+                            // Show preview next to node - PASS THE NODE!
+                            this.showPreviewOnCanvas(loraName, x, y, node)
+                                .then(cleanupFunc => {
+                                    if (cleanupFunc) {
+                                        this.lastNodePreviewClear = cleanupFunc;
+                                    }
+                                });
                         }
                     }
                 }
