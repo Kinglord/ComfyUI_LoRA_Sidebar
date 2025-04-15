@@ -19,7 +19,31 @@ import sys
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import random
+from pathlib import Path
+import warnings
 
+# Suppress the specific asyncio error on Windows
+if sys.platform.startswith('win'):
+    # Silence the specific ProactorBasePipeTransport error
+    def silence_event_loop_closed(func):
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except (RuntimeError, ConnectionResetError) as e:
+                if isinstance(e, RuntimeError) and str(e) != 'Event loop is closed':
+                    raise
+                return None
+        return wrapper
+
+    # Patch the problematic method
+    if hasattr(asyncio.proactor_events, '_ProactorBasePipeTransport'):
+        transport = asyncio.proactor_events._ProactorBasePipeTransport
+        transport.__del__ = silence_event_loop_closed(transport.__del__)
+        if hasattr(transport, '_call_connection_lost'):
+            transport._call_connection_lost = silence_event_loop_closed(transport._call_connection_lost)
+
+    # Also suppress the deprecation warnings that might come with this
+    warnings.filterwarnings('ignore', message='There is no current event loop')
 
 # Set up logging
 DEBUG = False
@@ -449,110 +473,30 @@ def get_subdir(file_path):
         # Get all possible lora directories from folder_paths
         lora_dirs = folder_paths.get_folder_paths("loras")
         logger.debug(f"Input file_path: {file_path}")
-        logger.debug(f"Lora dirs from folder_paths: {lora_dirs}")
-
+        
         # Filter out output directories
         lora_dirs = [d for d in lora_dirs if 'output' not in d.lower().split(os.sep)]
-        
-        logger.debug(f"Lora dirs from folder_paths (excluding output dirs): {lora_dirs}")
         
         if not lora_dirs:
             return ""
             
-        # Normalize the input path
-        norm_path = os.path.normpath(file_path)
-        logger.debug(f"Normalized input path: {norm_path}")
+        # Normalize and get real path (resolves symlinks)
+        real_file_path = os.path.realpath(file_path)
         
-        # Handle cross-drive path comparison by normalizing drive letters
-        file_drive, file_path_tail = os.path.splitdrive(norm_path)
-        
-        # Find the matching base directory
-        matching_base = None
-        matching_link = None
-        
+        # Find the matching base directory by checking which one contains our file
         for base_dir in lora_dirs:
-            base_dir = os.path.normpath(base_dir)
-            logger.debug(f"\nChecking base dir: {base_dir}")
+            base_dir = os.path.realpath(base_dir)
             
-            # Check for symlinks in this lora directory
             try:
-                for item in os.listdir(base_dir):
-                    link_path = os.path.join(base_dir, item)
-                    if os.path.islink(link_path):
-                        real_link = os.path.realpath(link_path)
-                        logger.debug(f"Found symlink: {item} -> {real_link}")
-                        
-                        # Apply drive neutralization to symlink target
-                        link_drive, link_tail = os.path.splitdrive(real_link)
-                        neutral_link = os.path.join("C:", link_tail)
-                        neutral_file = os.path.join("C:", file_path_tail)
-                        
-                        if neutral_file.startswith(neutral_link):
-                            matching_base = real_link
-                            matching_link = item
-                            logger.debug(f"Found matching symlink: {item}")
-                            break
-            except Exception as e:
-                logger.debug(f"Error checking symlinks in {base_dir}: {str(e)}")
+                # Use relative_to to get the relative path - this will raise ValueError if not a subpath
+                rel_path = Path(os.path.dirname(real_file_path)).relative_to(Path(base_dir))
+                # Convert to string and handle the base directory case
+                rel_path_str = str(rel_path)
+                return "" if rel_path_str == "." else rel_path_str
+            except ValueError:
                 continue
-            
-            # Regular path matching as before
-            base_drive, base_path_tail = os.path.splitdrive(base_dir)
-            
-            # Create drive-letter-neutral paths for comparison
-            neutral_file_path = os.path.join("C:", file_path_tail)
-            neutral_base_path = os.path.join("C:", base_path_tail)
-            
-            logger.debug(f"Neutral paths for comparison:")
-            logger.debug(f"  neutral_file_path: {neutral_file_path}")
-            logger.debug(f"  neutral_base_path: {neutral_base_path}")
-            
-            # Check if this base matches
-            if neutral_file_path.startswith(neutral_base_path):
-                logger.debug(f"Found matching base! Length: {len(base_dir)}")
-                if matching_base is None or len(base_dir) > len(matching_base):
-                    matching_base = base_dir
-                    logger.debug(f"Updated matching_base to: {matching_base}")
-        
-        if not matching_base:
-            logger.debug("No matching base directory found")
-            return ""
-            
-        logger.debug(f"Final matching base: {matching_base}")
-        
-        # If we matched via symlink, construct the path accordingly
-        if matching_link:
-            # Get the part of the path after the symlink target
-            _, match_tail = os.path.splitdrive(matching_base)
-            neutral_match = os.path.join("C:", match_tail)
-            neutral_file = os.path.join("C:", file_path_tail)
-            
-            after_base = neutral_file[len(neutral_match):].lstrip('\\/')
-            rel_path = os.path.join(matching_link, os.path.dirname(after_base))
-            logger.debug(f"Constructed symlink path: {rel_path}")
-            return rel_path
-        
-        # Regular path handling as before
-        _, match_path_tail = os.path.splitdrive(matching_base)
-        neutral_match_path = os.path.join("C:", match_path_tail)
-        
-        logger.debug(f"Neutral match path for relpath calc: {neutral_match_path}")
-        
-        # Calculate relative path
-        try:
-            rel_path = os.path.relpath(os.path.dirname(neutral_file_path), neutral_match_path)
-            logger.debug(f"Calculated relpath: {rel_path}")
-        except Exception as e:
-            logger.error(f"Error calculating relpath: {str(e)}")
-            return ""
-        
-        # Return empty string for root directory
-        if rel_path == ".":
-            logger.debug("Relpath is root directory")
-            return ""
-            
-        logger.debug(f"Final relative path: {rel_path}")
-        return rel_path
+                
+        return ""
             
     except Exception as e:
         logger.error(f"Error in get_subdir: {str(e)}")

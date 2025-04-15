@@ -348,9 +348,7 @@ class LoraSmartInfo {
                 </div>
             `;
 
-            // Calculate position considering window boundaries
-            const padding = 20;
-            const windowWidth = window.innerWidth;
+            // Get window height for vertical centering
             const windowHeight = window.innerHeight;
             
             // Add to document temporarily to get dimensions
@@ -716,43 +714,34 @@ class LoraSmartInfo {
         // Hook directly into ContextMenu creation
         const origContextMenu = LiteGraph.ContextMenu;
         LiteGraph.ContextMenu = function(values, options) {
-            // Debug the full structure
-            debug.log("ContextMenu called with:", {
-                values: values?.slice(0, 3), // First 3 items for brevity
-                options: {
-                    callback: options?.callback ? "function present" : "no callback",
-                    event: options?.event ? options.event.type : "no event",
-                    node: options?.node ? {
-                        type: options.node.type,
-                        widgets: options.node.widgets?.map(w => ({
-                            name: w.name,
-                            type: w.type,
-                            value: w.value
-                        }))
-                    } : "no node"
-                }
+            debug.log("ContextMenu creation triggered with:", {
+                hasValues: !!values,
+                hasOptions: !!options,
+                lastNode: self.lastNode?.type,
+                lastValue: self.lastLoraValue
             });
 
-            // Check if this is a file selection menu for LoRAs
-            const isLoraMenu = values?.some(v => 
-                typeof v === 'string' && 
-                v.toLowerCase().includes('.safetensors')
+            // If we have a tracked LoRA node, this is a LoRA menu
+            const isLoraMenu = self.lastNode && (
+                self.lastNode.type === "LoraLoader" ||
+                self.lastNode.type === "Power Lora Loader (rgthree)" ||
+                self.lastNode.type === "Power Prompt (rgthree)"
             );
 
-            debug.log("Menu analysis:", {
+            debug.log("Menu check result:", {
                 isLoraMenu,
-                valueCount: values?.length,
-                firstValue: values?.[0],
-                menuType: 'contextmenu'
+                menuValues: values
             });
 
             if (isLoraMenu) {
-                debug.log("LoRA menu detected - creating menu");
+                debug.log("Creating LoRA menu with preview support");
                 const menu = new origContextMenu(values, options);
                 const menuElement = menu.root;
+                debug.log("Menu element created:", menuElement);
 
                 // Process menu items once created
                 setTimeout(() => {
+                    debug.log("Processing menu items");
                     const cleanup = handleMenuItems(menuElement);
                     
                     // Watch for menu removal
@@ -760,9 +749,9 @@ class LoraSmartInfo {
                         mutations.forEach(mutation => {
                             mutation.removedNodes.forEach(node => {
                                 if (node === menuElement) {
+                                    debug.log("Menu removed, cleaning up");
                                     if (cleanup) cleanup();
                                     menuRemovalObserver.disconnect();
-                                    debug.log("Menu removed, cleanup complete");
                                 }
                             });
                         });
@@ -776,6 +765,7 @@ class LoraSmartInfo {
                 return menu;
             }
 
+            debug.log("Creating standard menu without preview support");
             return new origContextMenu(values, options);
         };
 
@@ -796,70 +786,73 @@ class LoraSmartInfo {
                     className: item.className
                 });
 
-                if (!dataValue?.toLowerCase().includes('.safetensors')) return;
+                // Only process items that represent LoRA values
+                if (!dataValue || typeof dataValue !== 'string') return;
 
-                item.style.pointerEvents = 'auto';
-
-                let clearPreview = null;
-                
-                const mouseEnterHandler = (e) => {
-                    debug.log("Mouse enter on LoRA item:", dataValue);
-                    if (self.menuDebounceTimer) {
-                        clearTimeout(self.menuDebounceTimer);
+                // Create hover handler for this item
+                const handleHover = () => {
+                    if (self.currentHoverTimer) {
+                        clearTimeout(self.currentHoverTimer);
                     }
 
-                    self.menuDebounceTimer = setTimeout(async () => {
-                        const cleanName = dataValue.split('\\').pop().replace(/\.[^/.]+$/, '');
-                        
-                        if (self.isSidebarOpen()) {
-                            self.showLoraInfo(cleanName);
-                        } else {
-                            if (clearPreview) {
-                                clearPreview();
-                                clearPreview = null;
-                            }
-                            
-                            clearPreview = await self.showSimplePreview(
-                                cleanName,
-                                e.clientX,
-                                e.clientY
-                            );
+                    self.currentHoverTimer = setTimeout(() => {
+                        // Clean up any node preview first
+                        if (self.lastNodePreviewClear) {
+                            self.lastNodePreviewClear();
+                            self.lastNodePreviewClear = null;
                         }
-                    }, self.menuDebounceDelay);
+
+                        const loraName = dataValue.split('\\').pop().replace('.safetensors', '');
+                        const rect = item.getBoundingClientRect();
+                        
+                        // Position to the left of menu item, vertically centered
+                        const x = rect.left;
+                        const y = rect.top + (rect.height / 2);
+
+                        // Create minimal node object with fixed height for menu context
+                        const dummyNode = {
+                            getBounding: () => [0, 0, 0, 256]  // Fixed height for menu previews
+                        };
+
+                        // Clean up any existing menu preview
+                        if (self.activePreviewCleanup) {
+                            self.activePreviewCleanup();
+                            self.activePreviewCleanup = null;
+                        }
+
+                        // Use existing preview function with our dummy node
+                        self.showPreviewOnCanvas(loraName, x, y, dummyNode)
+                            .then(cleanupFunc => {
+                                if (cleanupFunc) {
+                                    self.activePreviewCleanup = cleanupFunc;
+                                }
+                            });
+                    }, self.hoverDelay);
                 };
 
-                const mouseLeaveHandler = () => {
-                    debug.log("Mouse leave LoRA item:", dataValue);
-                    if (self.menuDebounceTimer) {
-                        clearTimeout(self.menuDebounceTimer);
-                        self.menuDebounceTimer = null;
+                // Create leave handler
+                const handleLeave = () => {
+                    if (self.currentHoverTimer) {
+                        clearTimeout(self.currentHoverTimer);
+                        self.currentHoverTimer = null;
                     }
-                    if (clearPreview) {
-                        clearPreview();
-                        clearPreview = null;
+                    if (self.activePreviewCleanup) {
+                        self.activePreviewCleanup();
+                        self.activePreviewCleanup = null;
                     }
                 };
 
-                item.addEventListener('mouseenter', mouseEnterHandler);
-                item.addEventListener('mouseleave', mouseLeaveHandler);
-                
-                // Store handlers for cleanup
-                item._handlers = {
-                    enter: mouseEnterHandler,
-                    leave: mouseLeaveHandler
+                // Add event listeners
+                item.addEventListener('mouseenter', handleHover);
+                item.addEventListener('mouseleave', handleLeave);
+
+                // Return cleanup function
+                return () => {
+                    item.removeEventListener('mouseenter', handleHover);
+                    item.removeEventListener('mouseleave', handleLeave);
+                    handleLeave(); // Make sure to clean up any active previews
                 };
             });
-
-            return () => {
-                debug.log("Cleaning up menu items");
-                items.forEach(item => {
-                    if (item._handlers) {
-                        item.removeEventListener('mouseenter', item._handlers.enter);
-                        item.removeEventListener('mouseleave', item._handlers.leave);
-                        delete item._handlers;
-                    }
-                });
-            };
         };
     }
 
