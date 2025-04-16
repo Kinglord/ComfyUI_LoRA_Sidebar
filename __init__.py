@@ -480,22 +480,22 @@ def get_subdir(file_path):
         if not lora_dirs:
             return ""
             
-        # Normalize and get real path (resolves symlinks)
-        real_file_path = os.path.realpath(file_path)
+        file_path = os.path.abspath(file_path)
+        file_dir = os.path.dirname(file_path)
         
-        # Find the matching base directory by checking which one contains our file
+        # For each base directory, walk through it following symlinks
         for base_dir in lora_dirs:
-            base_dir = os.path.realpath(base_dir)
-            
-            try:
-                # Use relative_to to get the relative path - this will raise ValueError if not a subpath
-                rel_path = Path(os.path.dirname(real_file_path)).relative_to(Path(base_dir))
-                # Convert to string and handle the base directory case
-                rel_path_str = str(rel_path)
-                return "" if rel_path_str == "." else rel_path_str
-            except ValueError:
-                continue
-                
+            base_dir = os.path.abspath(base_dir)
+            # Walk the directory tree, following symlinks
+            for root, _, _ in os.walk(base_dir, followlinks=True):
+                if os.path.samefile(root, file_dir):
+                    # Found the matching directory, now get relative path
+                    rel_path = os.path.relpath(root, base_dir)
+                    # Ensure no leading slash and convert to proper path format
+                    rel_path = rel_path.replace('/', os.sep).replace('\\', os.sep).lstrip(os.sep)
+                    # Return empty string if it's root, otherwise add trailing separator
+                    return "" if rel_path == "." else f"{rel_path}{os.sep}"
+                    
         return ""
             
     except Exception as e:

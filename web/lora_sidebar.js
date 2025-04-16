@@ -4,7 +4,7 @@ import { $el } from "../../scripts/ui.js";
 import LoraSmartInfo from './smart_info.js';
 
 var debug = {
-    enabled: true,
+    enabled: false,
     log: function(...args) {
         if (this.enabled) {
             console.log(...args);
@@ -849,7 +849,7 @@ class LoraSidebar {
             }
             return 'Unsorted';
         } else if (this.sortModels === 'Subdir') {
-            return lora.subdir ? lora.subdir.split('\\').pop() : 'Unsorted';
+            return lora.subdir ? lora.subdir.split(/[/\\]/).pop() : 'Unsorted';
         }
         return 'All LoRAs';
     }
@@ -1063,7 +1063,7 @@ class LoraSidebar {
                                 if (matchingTag) category = matchingTag;
                             }
                         } else if (this.sortModels === 'Subdir') {
-                            category = lora.subdir ? lora.subdir.split('\\').pop() : 'Unsorted';
+                            category = lora.subdir ? lora.subdir.split(/[/\\]/).pop() : 'Unsorted';
                         }
     
                         if (!categorizedLoras.has(category)) {
@@ -2381,9 +2381,11 @@ class LoraSidebar {
 
                                         // If a1111Style is enabled, prefix with LoRA syntax
                                         if (this.a1111Style) {
-                                            const loraPath = nodeData.path ? `${nodeData.path}\\` : '';
+                                            // const loraPath = nodeData.path ? `${nodeData.path}\\` : '';
+                                            const loraPath = loraData.subdir ? loraData.subdir : '';  // Just use subdir as-is from backend
                                             const loraName = nodeData.filename.replace(/\.[^/.]+$/, ""); // this might not be safe because filenames can we be weird
-                                            const loraPart = `${loraPath}${loraName}`;
+                                            // const loraPart = `${loraPath}${loraName}`;
+                                            const loraPart = loraPath ? `${loraPath}${loraName}` : loraName;  // Add forward slash between path and name
                                             const weight = nodeData.reco_weight ?? 1;
                                             const weightStr = weight.toString().includes('.') ? weight.toFixed(2) : weight;
                                             trainedWords = `<lora:${loraPart}:${weightStr}>, ${trainedWords}`;
@@ -2464,13 +2466,10 @@ class LoraSidebar {
             // Add the node to the graph (this needs to happen before we add widgets)
             app.graph.add(node);
 
-            // Use our existing code to add the lora to the new node
+            // add lora data
             const widget = node.addNewLoraWidget();
-
             const weight = loraData.reco_weight ?? 1;
-            // const loraPath = this.loraPathCalc(loraData); works on linux but is a hack so turning off, TODO - fix this properly
-            const loraPath = loraData.subdir ? `${loraData.subdir}\\${loraData.filename}` : loraData.filename;
-
+            const loraPath = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename; // Just use the path as it comes from the backend now
             widget.value = {
                 on: true,
                 lora: loraPath,
@@ -2479,8 +2478,8 @@ class LoraSidebar {
             };
 
             widget.loraInfo = {
-                file: loraData.filename.split("/").pop(), // Ensure we get just the filename
-                path: loraData.subdir,
+                file: loraData.filename.split("/").pop(),
+                path: loraData.subdir || "",
                 images: [],
             };
 
@@ -2491,7 +2490,7 @@ class LoraSidebar {
 
             node.setDirtyCanvas(true, true);
         } else {
-            // Original LoraLoader code
+            // Original LoraLoader code...
             const node = LiteGraph.createNode("LoraLoader");
             node.pos = [x, y];
 
@@ -2504,7 +2503,8 @@ class LoraSidebar {
             // Set widget values
             for (const widget of node.widgets) {
                 if (widget.name === "lora_name") {
-                    widget.value = nodeData.path ? `${nodeData.path}\\${nodeData.filename}` : nodeData.filename;
+                    widget.value = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename;
+                    // widget.value = nodeData.path ? `${nodeData.path}\\${nodeData.filename}` : nodeData.filename;
                 } else if (widget.name === "strength_model") {
                     widget.value = weight;
                 } else if (widget.name === "strength_clip") {
@@ -2535,7 +2535,7 @@ class LoraSidebar {
             // Update widget values
             for (const widget of node.widgets) {
                 if (widget.name === "lora_name") {
-                    widget.value = loraData.subdir ? `${loraData.subdir}\\${loraData.filename.split("/").pop()}` : loraData.filename.split("/").pop();
+                    widget.value = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename;  // Just use the filename as provided by backend
                 } else if (widget.name === "strength_model") {
                     widget.value = weight;
                 } else if (widget.name === "strength_clip") {
@@ -2549,18 +2549,18 @@ class LoraSidebar {
             debug.log("Created widget:", widget);
 
             const weight = loraData.reco_weight ?? 1;
-            const loraPath = this.loraPathCalcUpdate(loraData);
+            const loraPath = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename;
 
             widget.value = {
                 on: true,
-                lora: loraPath,
+                lora: loraPath,  // Use the filename directly from backend
                 strength: weight,
                 strengthTwo: null,
             };
 
             widget.loraInfo = {
-                file: filename, // Just use the filename
-                path: loraPath,
+                file: filename,
+                path: loraData.subdir || "",
                 images: [],
             };
 
@@ -3646,7 +3646,7 @@ class LoraSidebar {
         // Add subdir information
         if (lora.subdir) {
             const subdirElement = $el("p", { 
-                textContent: `Subdirectory: ${lora.subdir}`, 
+                textContent: `Subdirectory: ${lora.subdir.replace(/[/\\]$/, '')}`, 
                 className: "lora-subdir" 
             });
             contentContainer.appendChild(subdirElement);
