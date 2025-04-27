@@ -4,7 +4,7 @@ import { $el } from "../../scripts/ui.js";
 import LoraSmartInfo from './smart_info.js';
 
 var debug = {
-    enabled: false,
+    enabled: true,
     log: function(...args) {
         if (this.enabled) {
             console.log(...args);
@@ -1063,7 +1063,7 @@ class LoraSidebar {
                                 if (matchingTag) category = matchingTag;
                             }
                         } else if (this.sortModels === 'Subdir') {
-                            category = lora.subdir ? lora.subdir.split(/[/\\]/).pop() : 'Unsorted';
+                            category = lora.subdir ? lora.subdir.replace(/[/\\]+$/, '').split(/[/\\\\]/).pop() : 'Unsorted';
                         }
     
                         if (!categorizedLoras.has(category)) {
@@ -2335,13 +2335,14 @@ class LoraSidebar {
 
                     // Ensure we have the full path including filename
                     const fullPath = loraData.path || "";
+                    const fullFilename = fullPath.split(/[/\\]/).pop();
                     const filename = loraData.filename || dragData.id + ".safetensors";  // Fallback to ID if needed
 
                     const nodeData = {
                         name: loraData.name,
                         reco_weight: loraData.reco_weight,
                         path: loraData.subdir || "",  // Keep this as is
-                        filename: filename,
+                        filename: fullFilename,
                         trainedWords: loraData.trained_words
                     };
 
@@ -2359,7 +2360,7 @@ class LoraSidebar {
                     
                             if (node) {
                                 if (node.type === "LoraLoader" || node.type === "Power Lora Loader (rgthree)") {
-                                    this.updateLoraNode(node, loraData);
+                                    this.updateLoraNode(node, loraData, nodeData);
                                     debug.log("Successfully updated node");
                                 } else if (nodeData.trainedWords?.length > 0) {
                                     // Check if node has any text widgets
@@ -2469,7 +2470,7 @@ class LoraSidebar {
             // add lora data
             const widget = node.addNewLoraWidget();
             const weight = loraData.reco_weight ?? 1;
-            const loraPath = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename; // Just use the path as it comes from the backend now
+            const loraPath = loraData.subdir ? `${loraData.subdir}${nodeData.filename}` : nodeData.filename; // Just use the path as it comes from the backend now
             widget.value = {
                 on: true,
                 lora: loraPath,
@@ -2478,7 +2479,7 @@ class LoraSidebar {
             };
 
             widget.loraInfo = {
-                file: loraData.filename.split("/").pop(),
+                file: nodeData.filename,
                 path: loraData.subdir || "",
                 images: [],
             };
@@ -2503,7 +2504,7 @@ class LoraSidebar {
             // Set widget values
             for (const widget of node.widgets) {
                 if (widget.name === "lora_name") {
-                    widget.value = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename;
+                    widget.value = loraData.subdir ? `${loraData.subdir}${nodeData.filename}` : nodeData.filename;
                     // widget.value = nodeData.path ? `${nodeData.path}\\${nodeData.filename}` : nodeData.filename;
                 } else if (widget.name === "strength_model") {
                     widget.value = weight;
@@ -2520,9 +2521,9 @@ class LoraSidebar {
         app.graph.setDirtyCanvas(true, true);
     }
 
-    updateLoraNode(node, loraData) {
+    updateLoraNode(node, loraData, nodeData) {
         // Get just the filename without path
-        const filename = loraData.filename.split("/").pop();
+        const filename = nodeData.filename; //do we need this?
 
         // Handle different node types
         if (node.type === "LoraLoader") {
@@ -2535,7 +2536,7 @@ class LoraSidebar {
             // Update widget values
             for (const widget of node.widgets) {
                 if (widget.name === "lora_name") {
-                    widget.value = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename;  // Just use the filename as provided by backend
+                    widget.value = loraData.subdir ? `${loraData.subdir}${nodeData.filename}` : nodeData.filename;  // Just use the filename as provided by backend
                 } else if (widget.name === "strength_model") {
                     widget.value = weight;
                 } else if (widget.name === "strength_clip") {
@@ -2549,7 +2550,7 @@ class LoraSidebar {
             debug.log("Created widget:", widget);
 
             const weight = loraData.reco_weight ?? 1;
-            const loraPath = loraData.subdir ? `${loraData.subdir}${loraData.filename}` : loraData.filename;
+            const loraPath = loraData.subdir ? `${loraData.subdir}${nodeData.filename}` : nodeData.filename;
 
             widget.value = {
                 on: true,
