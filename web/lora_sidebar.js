@@ -1063,7 +1063,8 @@ class LoraSidebar {
                                 if (matchingTag) category = matchingTag;
                             }
                         } else if (this.sortModels === 'Subdir') {
-                            category = lora.subdir ? lora.subdir.replace(/[/\\]+$/, '').split(/[/\\\\]/).pop() : 'Unsorted';
+                            // Replace slashes with ' > ' for display, remove trailing slashes first
+                            category = lora.subdir ? lora.subdir.replace(/[/\\]+$/, '').replace(/[/\\]/g, ' > ') : 'Unsorted';
                         }
     
                         if (!categorizedLoras.has(category)) {
