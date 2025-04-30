@@ -166,12 +166,10 @@
 .model-info-popup {
     position: absolute;
     z-index: 1000;
-    background-color: #222;
+    background-color: var(--bg-color, #222);
     border: 1px solid #444;
     padding: 10px;
     border-radius: 5px;
-    color: #fff;
-    max-width: 400px;
     max-height: 80vh;
     overflow: auto;
     transition: opacity 0.3s ease, transform 0.3s ease;
@@ -521,7 +519,7 @@
 
 .image-info-popup {
     position: absolute;
-    background: #2a2a2a;
+    background: var(--bg-color, #2a2a2a);
     border: 1px solid #444;
     border-radius: 4px;
     padding: 10px;
@@ -530,7 +528,6 @@
     overflow-y: auto;
     z-index: 1002;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    color: #fff;
     font-size: 0.9em;
     word-wrap: break-word;
 }
@@ -914,7 +911,7 @@
 }
 
 .lora-preview-popup {
-    background: #1f1f1f;
+    background: var(--bg-color, #1f1f1f);
     border: 1px solid #333;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -988,16 +985,15 @@
 
 .description-popup {
     position: fixed;
-    background: #2a2a2a;
+    background: var(--bg-color, #2a2a2a);
     border: 1px solid #444;
     border-radius: 8px;
     padding: 15px;
     padding-right: 35px;
-    width: 350px;
+    width: 30vw;
     max-width: 90vw;
     max-height: 80vh;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: auto;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     z-index: 1002;
 }
@@ -1089,7 +1085,8 @@
     align-items: center;
     cursor: pointer;
     padding: 3px;
-    background-color: #3b3b3b;
+    background-color: var(--fg-color, #3b3b3b);
+    color: var(--bg-color, #E2E8F0);
     border-radius: 5px;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -1171,8 +1168,8 @@
     margin-bottom: 10px;
     border: 1px solid var(--border-color-light, #4B5563);
     border-radius: 4px;
-    background-color: var(--input-background-color, #2a2e33);
-    color: var(--input-text-color, #E2E8F0);
+    background-color: var(--fg-color, #2a2e33);
+    color: var(--bg-color, #E2E8F0);
     font-size: 14px;
 }
 
